@@ -8,10 +8,14 @@ import os
 import json
 import logging
 import requests
+import urllib3
 import base64
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
+
+# Disable SSL warnings for GitHub Actions environment
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load environment variables
 load_dotenv()
@@ -96,7 +100,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 'https://api.openai.com/v1/images/generations',
                 headers=headers,
                 json=payload,
-                timeout=60
+                timeout=60,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
@@ -124,7 +129,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 f'https://api.printful.com/files',
                 headers=headers,
                 files=files,
-                timeout=60
+                timeout=60,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
@@ -173,7 +179,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 f'https://api.printful.com/store/products',
                 headers=headers,
                 json=payload,
-                timeout=60
+                timeout=60,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
@@ -195,7 +202,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             response = requests.get(
                 f'https://api.printful.com/store/products/{printful_product_id}',
                 headers=headers,
-                timeout=30
+                timeout=30,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
@@ -270,7 +278,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 f'https://{self.shopify_store}.myshopify.com/admin/api/2023-04/products.json',
                 headers=headers,
                 json=product_data,
-                timeout=60
+                timeout=60,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
@@ -301,7 +310,8 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 f'https://{self.shopify_store}.myshopify.com/admin/api/2023-04/collects.json',
                 headers=headers,
                 json=collect_data,
-                timeout=30
+                timeout=30,
+                verify=False  # Handle SSL in GitHub Actions
             )
             response.raise_for_status()
             
