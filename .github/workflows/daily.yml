@@ -10,7 +10,10 @@ on:
 jobs:
   generate-tshirts:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write  # Allow writing to repository
+      actions: read
+      
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
