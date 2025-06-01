@@ -148,9 +148,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                     'type': 'default'
                 }
                 
-                # Upload to Printful file library (store-specific endpoint)
+                # Upload to Printful file library (general endpoint, not store-specific)
                 response = requests.post(
-                    f'https://api.printful.com/store/{self.printful_store_id}/files',
+                    'https://api.printful.com/files',
                     headers=headers,
                     files=files,
                     data=data,
