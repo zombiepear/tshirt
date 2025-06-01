@@ -52,6 +52,7 @@ jobs:
         echo "SHOPIFY_STORE=${{ secrets.SHOPIFY_STORE }}" >> .env
         echo "SHOPIFY_ACCESS_TOKEN=${{ secrets.SHOPIFY_ACCESS_TOKEN }}" >> .env
         echo "PRINTFUL_API_KEY=${{ secrets.PRINTFUL_API_KEY }}" >> .env
+        echo "PRINTFUL_STORE_ID=${{ secrets.PRINTFUL_STORE_ID }}" >> .env
         echo "MARKUP_PERCENT=${{ secrets.MARKUP_PERCENT }}" >> .env
         
     - name: Check if collections exist
