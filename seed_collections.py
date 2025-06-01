@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
-One-time setup script to create custom collections in Shopify.
+One-time setup script to create collections mapping WITHOUT actually creating Shopify collections.
 Creates collections.json mapping for use by other scripts.
 """
 
 import os
 import json
 import logging
-import requests
-import urllib3
-from typing import Dict
 from dotenv import load_dotenv
-
-# Disable SSL warnings for GitHub Actions environment
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load environment variables
 load_dotenv()
@@ -25,56 +19,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_shopify_collection(store: str, access_token: str, title: str, 
-                            handle: str) -> Dict:
-    """Create a custom collection in Shopify with SSL handling."""
-    headers = {
-        'X-Shopify-Access-Token': access_token,
-        'Content-Type': 'application/json'
-    }
-    
-    # Create custom collection (easier than smart collections)
-    collection_data = {
-        'custom_collection': {
-            'title': title,
-            'handle': handle,
-            'published': True,
-            'sort_order': 'best-selling'
-        }
-    }
-    
-    try:
-        response = requests.post(
-            f'https://{store}.myshopify.com/admin/api/2023-04/custom_collections.json',
-            headers=headers,
-            json=collection_data,
-            timeout=30,
-            verify=False  # Disable SSL verification for GitHub Actions
-        )
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"Error creating collection '{title}': {e}")
-        # Log the full response for debugging
-        if hasattr(e, 'response') and e.response:
-            logger.error(f"Response status: {e.response.status_code}")
-            logger.error(f"Response text: {e.response.text}")
-        raise
-
 def main():
-    """Create all required collections."""
-    # Get environment variables
-    store = os.getenv('SHOPIFY_STORE')
-    access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
+    """Create collections mapping without actually creating Shopify collections."""
+    logger.info("Starting collection mapping process (no Shopify collections created)...")
     
-    if not store or not access_token:
-        raise ValueError("Missing SHOPIFY_STORE or SHOPIFY_ACCESS_TOKEN environment variables")
-    
-    logger.info("Starting collection seeding process...")
-    logger.info(f"Store: {store}")
-    logger.info(f"Token: {access_token[:10]}...")  # Show first 10 chars for debugging
-    
-    # Define collections to create
+    # Define collections themes (we'll skip creating actual Shopify collections)
     collections_config = [
         {
             'key': 'brit-pride',
@@ -114,48 +63,29 @@ def main():
         }
     ]
     
-    # Create collections and build mapping
+    # Create collections mapping (without actual Shopify collections)
     collections_mapping = {}
     
     for config in collections_config:
-        try:
-            logger.info(f"Creating collection: {config['title']}")
-            result = create_shopify_collection(
-                store, 
-                access_token, 
-                config['title'], 
-                config['handle']
-            )
-            
-            collection_id = result['custom_collection']['id']
-            
-            collections_mapping[config['key']] = {
-                'shopify_id': str(collection_id),
-                'title': config['title'],
-                'handle': config['handle'],
-                'theme': config['theme']
-            }
-            
-            logger.info(f"✅ Created '{config['title']}' with ID: {collection_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to create collection '{config['title']}': {e}")
-            continue
+        collections_mapping[config['key']] = {
+            'shopify_id': None,  # No collection ID since we're not creating them
+            'title': config['title'],
+            'handle': config['handle'],
+            'theme': config['theme']
+        }
+        logger.info(f"✅ Added mapping for '{config['title']}'")
     
     # Save mapping to JSON file
-    if collections_mapping:
-        with open('collections.json', 'w') as f:
-            json.dump(collections_mapping, f, indent=2)
-        
-        logger.info(f"✅ Successfully created {len(collections_mapping)} collections")
-        logger.info("Collections mapping saved to collections.json")
-        
-        # Print summary
-        for key, collection in collections_mapping.items():
-            logger.info(f"  {key}: {collection['title']} (ID: {collection['shopify_id']})")
-    else:
-        logger.error("❌ No collections were created successfully")
-        raise Exception("Failed to create any collections")
+    with open('collections.json', 'w') as f:
+        json.dump(collections_mapping, f, indent=2)
+    
+    logger.info(f"✅ Successfully created {len(collections_mapping)} collection mappings")
+    logger.info("Collections mapping saved to collections.json")
+    logger.info("NOTE: No actual Shopify collections were created - products will be ungrouped")
+    
+    # Print summary
+    for key, collection in collections_mapping.items():
+        logger.info(f"  {key}: {collection['title']}")
 
 if __name__ == "__main__":
     main()
