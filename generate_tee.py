@@ -261,18 +261,14 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                             'value': str(printful_product_id),
                             'type': 'single_line_text_field'
                         }
-                    ]
+                    ],
+                    'tags': f'ai-generated, t-shirt, unique, printful, {collection_key}'
                 }
             }
             
             # Add to collection if specified
             if collection_id:
-                product_data['product']['metafields'].append({
-                    'namespace': 'collections',
-                    'key': 'smart_collection_id',
-                    'value': collection_id,
-                    'type': 'single_line_text_field'
-                })
+                product_data['product']['tags'] += f', collection-{collection_id}'
             
             response = requests.post(
                 f'https://{self.shopify_store}.myshopify.com/admin/api/2023-04/products.json',
