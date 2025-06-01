@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Daily T-shirt design generator and Shopify/Printful automation.
-Runs daily at 08:00 UK time to create new designs for each collection.
+Daily T-shirt design generator with Printful and Shopify integration.
+Automatically creates designs, uploads to Printful, and lists on Shopify.
 """
 
 import os
 import json
-import time
-import requests
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+import requests
+import base64
+from datetime import datetime
+from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -25,380 +25,406 @@ logger = logging.getLogger(__name__)
 
 class TShirtGenerator:
     def __init__(self):
-        """Initialize API clients and configuration."""
+        # API Configuration
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.shopify_store = os.getenv('SHOPIFY_STORE')
-        self.shopify_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
-        self.printful_key = os.getenv('PRINTFUL_API_KEY')
-        self.markup_percent = float(os.getenv('MARKUP_PERCENT', '1.4'))
+        self.shopify_access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
+        self.printful_api_key = os.getenv('PRINTFUL_API_KEY')
+        self.printful_store_id = os.getenv('PRINTFUL_STORE_ID')
+        self.markup_percent = float(os.getenv('MARKUP_PERCENT', '40'))
         
         # Validate required environment variables
-        required_vars = ['OPENAI_API_KEY', 'SHOPIFY_STORE', 'SHOPIFY_ACCESS_TOKEN', 'PRINTFUL_API_KEY']
+        required_vars = [
+            'OPENAI_API_KEY', 'SHOPIFY_STORE', 'SHOPIFY_ACCESS_TOKEN', 
+            'PRINTFUL_API_KEY', 'PRINTFUL_STORE_ID'
+        ]
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+            raise ValueError(f"Missing required environment variables: {missing_vars}")
         
-        # API endpoints
-        self.shopify_base = f"https://{self.shopify_store}.myshopify.com/admin/api/2024-04"
-        self.printful_base = "https://api.printful.com"
+        # Load collections mapping
+        try:
+            with open('collections.json', 'r') as f:
+                self.collections = json.load(f)
+            logger.info(f"Loaded {len(self.collections)} collections")
+        except FileNotFoundError:
+            logger.error("collections.json not found. Run seed_collections.py first.")
+            raise
         
-        # Collection definitions with prompts
-        self.collections = {
-            'brit-pride': {
-                'name': 'Proper British',
-                'prompt': "British pride t-shirt design, Union Jack elements, tea culture, queue jokes, weather humor"
-            },
-            'brit-humour': {
-                'name': 'British Banter',
-                'prompt': "British sarcasm t-shirt design, dry wit, taking the piss, understatement humor"
-            },
-            'pub-culture': {
-                'name': 'Pub Life',
-                'prompt': "British pub culture t-shirt design, beer, Sunday roast, fancy a pint, local pub vibes"
-            },
-            'tea-obsessed': {
-                'name': 'Tea & Biscuits',
-                'prompt': "British tea obsession t-shirt design, proper brew, digestives, put the kettle on"
-            },
-            'regional-pride': {
-                'name': 'Local Heroes',
-                'prompt': "British regional pride t-shirt design, Manchester Liverpool Birmingham Scottish Welsh Yorkshire"
-            },
-            'christmas': {
-                'name': 'Christmas Crackers',
-                'prompt': "British Christmas t-shirt design, Christmas jumper, Boxing Day, festive traditions"
-            },
-            'easter': {
-                'name': 'Easter Treats',
-                'prompt': "Easter t-shirt design, chocolate eggs, spring vibes, British bank holiday mood"
-            },
-            'seasons': {
-                'name': 'Seasonal Vibes',
-                'prompt': "British seasons t-shirt design, weather jokes, four seasons in one day, seasonal humor"
-            },
-            'bonfire-night': {
-                'name': 'Remember Remember',
-                'prompt': "Guy Fawkes bonfire night t-shirt design, fireworks, British autumn traditions"
-            },
-            'birthdays': {
-                'name': 'Birthday Legends',
-                'prompt': "birthday celebration t-shirt design, age jokes, birthday month pride, celebration vibes"
-            },
-            'celebrations': {
-                'name': 'Life Moments',
-                'prompt': "celebration t-shirt design, graduations, achievements, milestones, life moments"
-            },
-            'motivation': {
-                'name': 'Daily Grind',
-                'prompt': "motivational t-shirt design, Monday motivation, hustle culture, you've got this"
-            },
-            'pet-parents': {
-                'name': 'Fur Baby Love',
-                'prompt': "pet parent t-shirt design, dog walking, cat obsession, fur baby love, pet humor"
-            },
-            'geek-culture': {
-                'name': 'Proper Nerdy',
-                'prompt': "geek culture t-shirt design, gaming, sci-fi, tech jokes, nerd pride"
-            },
-            'food-obsessed': {
-                'name': 'Foodie Life',
-                'prompt': "British food t-shirt design, full English, fish and chips, Sunday roast, foodie love"
+        # Printful product configuration (Bella + Canvas 3001 Unisex T-Shirt)
+        self.printful_product_id = 71  # Bella + Canvas 3001
+        self.printful_variant_ids = [
+            4011, 4012, 4013, 4014, 4017,  # S, M, L, XL, 2XL in White
+            4016, 4018, 4019, 4020, 4021   # S, M, L, XL, 2XL in Black
+        ]
+
+    def generate_design_prompt(self, collection_key: str, theme: str) -> str:
+        """Generate a detailed prompt for DALL-E based on collection theme."""
+        base_prompt = f"""Create a t-shirt design for: {theme}
+
+Style requirements:
+- Clean, modern vector-style illustration
+- Bold, eye-catching design suitable for t-shirt printing
+- High contrast colors that work on both white and black shirts
+- No text or typography (design only)
+- Centered composition
+- Simple but impactful visual elements
+
+Design focus: {theme}
+Make it visually appealing, trendy, and suitable for casual wear."""
+        
+        return base_prompt
+
+    def generate_design_with_openai(self, prompt: str) -> Optional[str]:
+        """Generate design using DALL-E API."""
+        try:
+            headers = {
+                'Authorization': f'Bearer {self.openai_api_key}',
+                'Content-Type': 'application/json'
             }
-        }
-
-    def retry_request(self, func, max_retries: int = 3, delay: float = 1.0) -> requests.Response:
-        """Retry HTTP requests with exponential backoff."""
-        for attempt in range(max_retries):
-            try:
-                response = func()
-                if response.status_code == 429:  # Rate limited
-                    wait_time = delay * (2 ** attempt)
-                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
-                    time.sleep(wait_time)
-                    continue
-                return response
-            except requests.RequestException as e:
-                if attempt == max_retries - 1:
-                    raise e
-                wait_time = delay * (2 ** attempt)
-                logger.warning(f"Request failed. Retrying in {wait_time}s. Error: {e}")
-                time.sleep(wait_time)
-        
-        raise Exception("Max retries exceeded")
-
-    def generate_design(self, prompt: str, category: str) -> Optional[str]:
-        """Generate T-shirt design using OpenAI DALL-E API."""
-        logger.info(f"Generating design for {category}: {prompt}")
-        
-        headers = {
-            'Authorization': f'Bearer {self.openai_api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        payload = {
-            'model': 'dall-e-3',
-            'prompt': f"{prompt}, transparent background, t-shirt design, high quality, 1024x1024",
-            'size': '1024x1024',
-            'quality': 'standard',
-            'n': 1,
-            'response_format': 'url'
-        }
-        
-        def make_request():
-            return requests.post(
+            
+            payload = {
+                'model': 'dall-e-3',
+                'prompt': prompt,
+                'n': 1,
+                'size': '1024x1024',
+                'quality': 'standard',
+                'response_format': 'b64_json'
+            }
+            
+            response = requests.post(
                 'https://api.openai.com/v1/images/generations',
                 headers=headers,
-                json=payload
+                json=payload,
+                timeout=60
             )
-        
-        try:
-            response = self.retry_request(make_request)
-            if response.status_code == 200:
-                data = response.json()
-                image_url = data['data'][0]['url']
-                logger.info(f"Design generated successfully for {category}")
-                return image_url
-            else:
-                logger.error(f"OpenAI API error: {response.status_code} - {response.text}")
-                return None
+            response.raise_for_status()
+            
+            result = response.json()
+            return result['data'][0]['b64_json']
+            
         except Exception as e:
-            logger.error(f"Failed to generate design for {category}: {e}")
+            logger.error(f"OpenAI API error: {e}")
             return None
 
-    def upload_to_printful(self, image_url: str, title: str) -> Optional[Tuple[str, float]]:
-        """Upload design to Printful and create product."""
-        logger.info(f"Uploading to Printful: {title}")
-        
-        headers = {
-            'Authorization': f'Bearer {self.printful_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        # First, upload the design file
-        file_payload = {
-            'url': image_url,
-            'filename': f"{title.replace(' ', '_')}.png"
-        }
-        
-        def upload_file():
-            return requests.post(
-                f"{self.printful_base}/files",
-                headers=headers,
-                json=file_payload
-            )
-        
+    def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
+        """Upload design to Printful file library."""
         try:
-            file_response = self.retry_request(upload_file)
-            if file_response.status_code != 200:
-                logger.error(f"Failed to upload file to Printful: {file_response.text}")
-                return None
+            # Prepare the file upload
+            files = {
+                'file': (filename, base64.b64decode(image_data), 'image/png')
+            }
             
-            file_data = file_response.json()
-            file_id = file_data['result']['id']
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}'
+            }
             
-            # Create product with Bella Canvas 3001
-            product_payload = {
+            # Upload to Printful file library
+            response = requests.post(
+                f'https://api.printful.com/files',
+                headers=headers,
+                files=files,
+                timeout=60
+            )
+            response.raise_for_status()
+            
+            return response.json()
+            
+        except Exception as e:
+            logger.error(f"Failed to upload file to Printful: {e}")
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response: {e.response.text}")
+            return None
+
+    def create_printful_product(self, file_info: Dict, title: str, collection_key: str) -> Optional[Dict]:
+        """Create product in Printful store."""
+        try:
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Create sync product payload
+            payload = {
                 'sync_product': {
                     'name': title,
-                    'thumbnail': image_url
+                    'thumbnail': file_info['result']['url']
                 },
-                'sync_variants': [{
-                    'retail_price': '0.00',  # Will be calculated after getting cost
-                    'variant_id': 4011,  # Bella Canvas 3001 - S
-                    'files': [{
-                        'id': file_id,
-                        'type': 'front',
-                        'position': {
-                            'area_width': 1800,
-                            'area_height': 2400,
-                            'width': 1800,
-                            'height': 1800,
-                            'top': 300,
-                            'left': 0
+                'sync_variants': []
+            }
+            
+            # Add variants for different sizes and colors
+            for variant_id in self.printful_variant_ids:
+                variant = {
+                    'retail_price': '19.99',
+                    'variant_id': variant_id,
+                    'files': [
+                        {
+                            'id': file_info['result']['id'],
+                            'type': 'default',
+                            'url': file_info['result']['url']
                         }
-                    }]
-                }]
-            }
+                    ]
+                }
+                payload['sync_variants'].append(variant)
             
-            def create_product():
-                return requests.post(
-                    f"{self.printful_base}/store/products",
-                    headers=headers,
-                    json=product_payload
-                )
-            
-            product_response = self.retry_request(create_product)
-            if product_response.status_code == 200:
-                product_data = product_response.json()
-                product_id = product_data['result']['id']
-                
-                # Get pricing information
-                def get_pricing():
-                    return requests.get(
-                        f"{self.printful_base}/store/products/{product_id}",
-                        headers=headers
-                    )
-                
-                pricing_response = self.retry_request(get_pricing)
-                if pricing_response.status_code == 200:
-                    pricing_data = pricing_response.json()
-                    base_cost = float(pricing_data['result']['sync_variants'][0]['costs']['total'])
-                    retail_price = round(base_cost * self.markup_percent, 2)
-                    
-                    # Update with calculated price
-                    update_payload = {
-                        'sync_variants': [{
-                            'id': pricing_data['result']['sync_variants'][0]['id'],
-                            'retail_price': f"{retail_price:.2f}"
-                        }]
-                    }
-                    
-                    def update_pricing():
-                        return requests.put(
-                            f"{self.printful_base}/store/products/{product_id}",
-                            headers=headers,
-                            json=update_payload
-                        )
-                    
-                    self.retry_request(update_pricing)
-                    logger.info(f"Printful product created: {product_id} at £{retail_price}")
-                    return product_id, retail_price
-                    
-            logger.error(f"Failed to create Printful product: {product_response.text}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Printful upload failed for {title}: {e}")
-            return None
-
-    def create_shopify_product(self, title: str, price: float, category: str, printful_id: str) -> Optional[str]:
-        """Create product in Shopify and assign to collections."""
-        logger.info(f"Creating Shopify product: {title}")
-        
-        today = datetime.now().strftime('%Y-%m-%d')
-        tags = [category, 'tshirt-uk', 'daily-design', today]
-        
-        headers = {
-            'X-Shopify-Access-Token': self.shopify_token,
-            'Content-Type': 'application/json'
-        }
-        
-        product_payload = {
-            'product': {
-                'title': title,
-                'body_html': f"<p>Fresh daily design from our {self.collections[category]['name']} collection.</p>",
-                'vendor': 'tshirt.uk',
-                'product_type': 'T-Shirt',
-                'tags': ', '.join(tags),
-                'status': 'active',
-                'variants': [{
-                    'price': f"{price:.2f}",
-                    'inventory_management': 'printful',
-                    'fulfillment_service': 'printful'
-                }]
-            }
-        }
-        
-        def create_product():
-            return requests.post(
-                f"{self.shopify_base}/products.json",
+            # Create the product
+            response = requests.post(
+                f'https://api.printful.com/store/products',
                 headers=headers,
-                json=product_payload
+                json=payload,
+                timeout=60
             )
-        
-        try:
-            response = self.retry_request(create_product)
-            if response.status_code == 201:
-                product_data = response.json()
-                product_id = product_data['product']['id']
-                
-                # Assign to collections
-                self.assign_to_collections(product_id, category, headers)
-                
-                logger.info(f"Shopify product created: {product_id}")
-                return str(product_id)
-            else:
-                logger.error(f"Failed to create Shopify product: {response.text}")
-                return None
-                
+            response.raise_for_status()
+            
+            return response.json()
+            
         except Exception as e:
-            logger.error(f"Shopify product creation failed for {title}: {e}")
+            logger.error(f"Failed to create Printful product: {e}")
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response: {e.response.text}")
             return None
 
-    def assign_to_collections(self, product_id: str, category: str, headers: Dict):
-        """Assign product to relevant collections."""
+    def get_printful_cost(self, printful_product_id: str) -> float:
+        """Get the cost of the product from Printful."""
         try:
-            # Load collections mapping
-            if os.path.exists('collections.json'):
-                with open('collections.json', 'r') as f:
-                    collections_map = json.load(f)
-                
-                collections_to_assign = [category]
-                
-                for collection_slug in collections_to_assign:
-                    if collection_slug in collections_map:
-                        collection_id = collections_map[collection_slug]
-                        
-                        collect_payload = {
-                            'collect': {
-                                'product_id': product_id,
-                                'collection_id': collection_id
-                            }
-                        }
-                        
-                        def add_to_collection():
-                            return requests.post(
-                                f"{self.shopify_base}/collects.json",
-                                headers=headers,
-                                json=collect_payload
-                            )
-                        
-                        self.retry_request(add_to_collection)
-                        logger.info(f"Added product {product_id} to collection {collection_slug}")
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}'
+            }
+            
+            response = requests.get(
+                f'https://api.printful.com/store/products/{printful_product_id}',
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            product_data = response.json()
+            # Get the first variant's cost as baseline
+            if product_data['result']['sync_variants']:
+                cost = float(product_data['result']['sync_variants'][0]['cost'])
+                return cost
+            
+            return 8.50  # Fallback cost
+            
         except Exception as e:
-            logger.error(f"Failed to assign collections: {e}")
+            logger.error(f"Failed to get Printful cost: {e}")
+            return 8.50  # Fallback cost
 
-    def generate_daily_designs(self, categories: Optional[List[str]] = None):
-        """Generate designs for all collections or specified categories."""
-        target_categories = categories or list(self.collections.keys())
+    def create_shopify_product(self, title: str, collection_id: str, price: float, 
+                             printful_product_id: str, image_url: str) -> Optional[Dict]:
+        """Create product in Shopify store."""
+        try:
+            headers = {
+                'X-Shopify-Access-Token': self.shopify_access_token,
+                'Content-Type': 'application/json'
+            }
+            
+            product_data = {
+                'product': {
+                    'title': title,
+                    'body_html': f'<p>Unique t-shirt design created with AI. High-quality print on comfortable unisex t-shirt.</p><p>Fulfilled by Printful.</p>',
+                    'vendor': 'AI Design Co',
+                    'product_type': 'T-Shirt',
+                    'status': 'active',
+                    'published': True,
+                    'tags': 'ai-generated, t-shirt, unique, printful',
+                    'images': [
+                        {
+                            'src': image_url,
+                            'alt': title
+                        }
+                    ],
+                    'variants': [
+                        {
+                            'title': 'Default Title',
+                            'price': str(price),
+                            'sku': f'AI-{printful_product_id}',
+                            'inventory_management': 'printful',
+                            'fulfillment_service': 'printful',
+                            'requires_shipping': True,
+                            'taxable': True
+                        }
+                    ],
+                    'metafields': [
+                        {
+                            'namespace': 'printful',
+                            'key': 'product_id',
+                            'value': str(printful_product_id),
+                            'type': 'single_line_text_field'
+                        }
+                    ]
+                }
+            }
+            
+            # Add to collection if specified
+            if collection_id:
+                product_data['product']['metafields'].append({
+                    'namespace': 'collections',
+                    'key': 'smart_collection_id',
+                    'value': collection_id,
+                    'type': 'single_line_text_field'
+                })
+            
+            response = requests.post(
+                f'https://{self.shopify_store}.myshopify.com/admin/api/2023-04/products.json',
+                headers=headers,
+                json=product_data,
+                timeout=60
+            )
+            response.raise_for_status()
+            
+            return response.json()
+            
+        except Exception as e:
+            logger.error(f"Failed to create Shopify product: {e}")
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response: {e.response.text}")
+            return None
+
+    def add_product_to_collection(self, product_id: str, collection_id: str) -> bool:
+        """Add product to Shopify collection."""
+        try:
+            headers = {
+                'X-Shopify-Access-Token': self.shopify_access_token,
+                'Content-Type': 'application/json'
+            }
+            
+            collect_data = {
+                'collect': {
+                    'product_id': product_id,
+                    'collection_id': collection_id
+                }
+            }
+            
+            response = requests.post(
+                f'https://{self.shopify_store}.myshopify.com/admin/api/2023-04/collects.json',
+                headers=headers,
+                json=collect_data,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add product to collection: {e}")
+            return False
+
+    def generate_daily_products(self, num_products: int = 3) -> List[Dict]:
+        """Generate specified number of products for today."""
+        results = []
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         
-        for category in target_categories:
-            if category not in self.collections:
-                logger.warning(f"Unknown category: {category}")
-                continue
+        # Select collections for today (cycle through available ones)
+        collection_keys = list(self.collections.keys())
+        selected_collections = collection_keys[:num_products]
+        
+        for i, collection_key in enumerate(selected_collections):
+            try:
+                collection = self.collections[collection_key]
+                theme = collection['theme']
+                collection_id = collection['shopify_id']
                 
-            collection_info = self.collections[category]
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-            title = f"{collection_info['name']} Design {timestamp}"
-            
-            # Generate design
-            image_url = self.generate_design(collection_info['prompt'], category)
-            if not image_url:
-                continue
-            
-            # Upload to Printful
-            printful_result = self.upload_to_printful(image_url, title)
-            if not printful_result:
-                continue
+                logger.info(f"Generating design for {collection_key}: {theme}")
                 
-            printful_id, price = printful_result
-            
-            # Create Shopify product
-            shopify_id = self.create_shopify_product(title, price, category, printful_id)
-            if shopify_id:
-                logger.info(f"✅ {title} | {category} | £{price} | {shopify_id}")
-            
-            # Small delay between products to avoid rate limits
-            time.sleep(2)
+                # Generate design
+                prompt = self.generate_design_prompt(collection_key, theme)
+                image_data = self.generate_design_with_openai(prompt)
+                
+                if not image_data:
+                    logger.error(f"Failed to generate design for {collection_key}")
+                    continue
+                
+                logger.info(f"Design generated successfully for {collection_key}")
+                
+                # Create filename
+                clean_title = collection['title'].replace(' ', '_').replace('&', 'and')
+                filename = f"{clean_title}_{timestamp}.png"
+                
+                # Upload to Printful
+                logger.info(f"Uploading to Printful: {collection['title']} {timestamp}")
+                file_info = self.upload_to_printful(image_data, filename)
+                
+                if not file_info:
+                    logger.error(f"Failed to upload design for {collection_key}")
+                    continue
+                
+                # Create Printful product
+                printful_product = self.create_printful_product(
+                    file_info, collection['title'], collection_key
+                )
+                
+                if not printful_product:
+                    logger.error(f"Failed to create Printful product for {collection_key}")
+                    continue
+                
+                printful_product_id = printful_product['result']['id']
+                logger.info(f"Printful product created: {printful_product_id}")
+                
+                # Calculate pricing
+                cost = self.get_printful_cost(printful_product_id)
+                price = round(cost * (1 + self.markup_percent / 100), 2)
+                
+                # Create Shopify product
+                logger.info(f"Creating Shopify product: {collection['title']}")
+                shopify_product = self.create_shopify_product(
+                    collection['title'],
+                    collection_id,
+                    price,
+                    printful_product_id,
+                    file_info['result']['url']
+                )
+                
+                if not shopify_product:
+                    logger.error(f"Failed to create Shopify product for {collection_key}")
+                    continue
+                
+                shopify_product_id = shopify_product['product']['id']
+                logger.info(f"Shopify product created: {shopify_product_id}")
+                
+                # Add to collection
+                if collection_id:
+                    self.add_product_to_collection(shopify_product_id, collection_id)
+                
+                result = {
+                    'collection_key': collection_key,
+                    'title': collection['title'],
+                    'theme': theme,
+                    'printful_product_id': printful_product_id,
+                    'shopify_product_id': shopify_product_id,
+                    'price': price,
+                    'cost': cost,
+                    'image_url': file_info['result']['url']
+                }
+                
+                results.append(result)
+                
+                logger.info(f"✅ {collection['title']} | {collection_key} | £{price} | {shopify_product_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process {collection_key}: {e}")
+                continue
+        
+        return results
 
 def main():
     """Main execution function."""
     try:
         generator = TShirtGenerator()
-        generator.generate_daily_designs()
-        logger.info("Daily design generation completed successfully")
+        
+        logger.info("Starting daily t-shirt generation...")
+        results = generator.generate_daily_products(num_products=3)
+        
+        if results:
+            logger.info(f"✅ Successfully created {len(results)} products")
+            for result in results:
+                logger.info(f"  - {result['title']}: £{result['price']} (Shopify: {result['shopify_product_id']})")
+        else:
+            logger.warning("⚠️ No products were created successfully")
+            
     except Exception as e:
-        logger.error(f"Daily generation failed: {e}")
+        logger.error(f"Script failed: {e}")
         raise
 
 if __name__ == "__main__":
