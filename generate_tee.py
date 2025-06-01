@@ -10,6 +10,7 @@ import logging
 import requests
 import urllib3
 import base64
+import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
@@ -116,7 +117,15 @@ Make it visually appealing, trendy, and suitable for casual wear."""
         """Upload design to Printful file library."""
         try:
             headers = {
-                'Authorization': f'Bearer {self.printful_api_key}'
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site'
             }
             
             # Decode base64 image data
@@ -143,7 +152,7 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             
             if response.status_code != 200:
                 logger.error(f"Printful upload failed with status {response.status_code}")
-                logger.error(f"Response: {response.text}")
+                logger.error(f"Response: {response.text[:500]}...")  # Truncate long HTML responses
                 
             response.raise_for_status()
             return response.json()
@@ -151,7 +160,7 @@ Make it visually appealing, trendy, and suitable for casual wear."""
         except Exception as e:
             logger.error(f"Failed to upload file to Printful: {e}")
             if hasattr(e, 'response') and e.response:
-                logger.error(f"Response: {e.response.text}")
+                logger.error(f"Response: {e.response.text[:200]}...")  # Truncate for readability
             return None
 
     def create_printful_product(self, file_info: Dict, title: str, collection_key: str) -> Optional[Dict]:
@@ -159,7 +168,10 @@ Make it visually appealing, trendy, and suitable for casual wear."""
         try:
             headers = {
                 'Authorization': f'Bearer {self.printful_api_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9'
             }
             
             # Create sync product payload
@@ -208,7 +220,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
         """Get the cost of the product from Printful."""
         try:
             headers = {
-                'Authorization': f'Bearer {self.printful_api_key}'
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
             }
             
             response = requests.get(
@@ -374,6 +388,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                     logger.error(f"Failed to upload design for {collection_key}")
                     continue
                 
+                # Small delay between Printful API calls
+                time.sleep(1)
+                
                 # Create Printful product
                 printful_product = self.create_printful_product(
                     file_info, collection['title'], collection_key
@@ -389,6 +406,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 # Calculate pricing
                 cost = self.get_printful_cost(printful_product_id)
                 price = round(cost * (1 + self.markup_percent / 100), 2)
+                
+                # Small delay before Shopify API call
+                time.sleep(1)
                 
                 # Create Shopify product
                 logger.info(f"Creating Shopify product: {collection['title']}")
@@ -427,6 +447,10 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 results.append(result)
                 
                 logger.info(f"✅ {collection['title']} | {collection_key} | £{price} | {shopify_product_id}")
+                
+                # Add small delay between products to avoid rate limiting
+                if i < len(selected_collections) - 1:  # Don't delay after last product
+                    time.sleep(2)
                 
             except Exception as e:
                 logger.error(f"Failed to process {collection_key}: {e}")
