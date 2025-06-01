@@ -23,8 +23,70 @@ def main():
     """Create collections mapping without actually creating Shopify collections."""
     logger.info("Starting collection mapping process (no Shopify collections created)...")
     
-    # Define collections themes (we'll skip creating actual Shopify collections)
+    # Define collections to create - including celebrations, events, and occasions
     collections_config = [
+        # Celebrations & Events
+        {
+            'key': 'birthday-party',
+            'title': 'Birthday Celebrations',
+            'handle': 'birthday-celebrations',
+            'theme': 'Birthday party t-shirt design, cake, balloons, party hats, funny age jokes, birthday wishes'
+        },
+        {
+            'key': 'christmas-festive',
+            'title': 'Christmas & Holiday',
+            'handle': 'christmas-holiday',
+            'theme': 'Christmas holiday t-shirt design, Santa, reindeer, snow, festive vibes, holiday cheer'
+        },
+        {
+            'key': 'wedding-love',
+            'title': 'Weddings & Love',
+            'handle': 'weddings-love',
+            'theme': 'Wedding celebration t-shirt design, bride, groom, love hearts, romance, marriage humor'
+        },
+        {
+            'key': 'stag-party',
+            'title': 'Stag Party',
+            'handle': 'stag-party',
+            'theme': 'Stag do t-shirt design, bachelor party, lads night out, drinking games, last night of freedom'
+        },
+        {
+            'key': 'hen-party',
+            'title': 'Hen Party',
+            'handle': 'hen-party',
+            'theme': 'Hen do t-shirt design, bachelorette party, girls night out, bride tribe, fun celebrations'
+        },
+        {
+            'key': 'christening-baby',
+            'title': 'Christenings & Babies',
+            'handle': 'christenings-babies',
+            'theme': 'Christening ceremony t-shirt design, baby celebration, baptism, new life, family gathering'
+        },
+        {
+            'key': 'anniversary-milestone',
+            'title': 'Anniversaries',
+            'handle': 'anniversaries',
+            'theme': 'Anniversary celebration t-shirt design, milestone years, love endures, relationship goals'
+        },
+        {
+            'key': 'graduation-achievement',
+            'title': 'Graduation & Success',
+            'handle': 'graduation-success',
+            'theme': 'Graduation achievement t-shirt design, cap and gown, diploma, academic success, future goals'
+        },
+        {
+            'key': 'retirement-freedom',
+            'title': 'Retirement Party',
+            'handle': 'retirement-party',
+            'theme': 'Retirement celebration t-shirt design, freedom at last, no more Mondays, pension life'
+        },
+        {
+            'key': 'new-year-fresh',
+            'title': 'New Year Fresh Start',
+            'handle': 'new-year-fresh',
+            'theme': 'New Year resolution t-shirt design, fresh start, midnight countdown, champagne celebration'
+        },
+        # British Humor (keeping a few)
         {
             'key': 'brit-pride',
             'title': 'Proper British',
@@ -32,34 +94,10 @@ def main():
             'theme': 'British pride t-shirt design, Union Jack elements, tea culture, queue jokes, weather humor'
         },
         {
-            'key': 'brit-humour',
-            'title': 'British Banter',
-            'handle': 'british-banter',
-            'theme': 'British sarcasm t-shirt design, dry wit, taking the piss, understatement humor'
-        },
-        {
             'key': 'pub-culture',
             'title': 'Pub Life',
             'handle': 'pub-life',
             'theme': 'British pub culture t-shirt design, beer, Sunday roast, fancy a pint, local pub vibes'
-        },
-        {
-            'key': 'football-mad',
-            'title': 'Football Mad',
-            'handle': 'football-mad',
-            'theme': 'British football culture t-shirt design, coming home jokes, penalty shootouts, VAR complaints'
-        },
-        {
-            'key': 'tea-time',
-            'title': 'Tea Time',
-            'handle': 'tea-time',
-            'theme': 'British tea culture t-shirt design, proper brew, biscuits, milk first debate, cuppa jokes'
-        },
-        {
-            'key': 'weather-talk',
-            'title': 'Weather Talk',
-            'handle': 'weather-talk',
-            'theme': 'British weather obsession t-shirt design, rain jokes, sunshine panic, small talk culture'
         }
     ]
     
