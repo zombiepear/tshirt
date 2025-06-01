@@ -241,44 +241,67 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             image_url = self.upload_image_to_temp_host(image_data, filename)
             
             if image_url:
-                # Method 1: Upload via URL
+                # Method 1: Upload via URL - try different JSON structures
                 headers = {
                     'Authorization': f'Bearer {self.printful_api_key}',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Content-Type': 'application/json'
                 }
                 
-                data = {
-                    'files': [
-                        {
-                            'url': image_url,
-                            'filename': filename,
-                            'type': 'default'
-                        }
-                    ],
-                    'store_id': self.printful_store_id
-                }
+                # Try different JSON structures that Printful might expect
+                url_formats = [
+                    # Format 1: Direct URL field
+                    {
+                        'url': image_url,
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    },
+                    # Format 2: file_url field 
+                    {
+                        'file_url': image_url,
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    },
+                    # Format 3: files array with url
+                    {
+                        'files': [image_url],
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    },
+                    # Format 4: Simple file field
+                    {
+                        'file': image_url,
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    }
+                ]
                 
-                logger.info(f"Uploading to Printful with image URL")
-                
-                response = requests.post(
-                    'https://api.printful.com/files',
-                    headers=headers,
-                    json=data,
-                    timeout=60,
-                    verify=False
-                )
-                
-                if response.status_code == 200:
-                    logger.info(f"✅ File upload successful via URL method")
-                    return response.json()
-                else:
-                    logger.error(f"URL method failed: {response.status_code}")
+                for i, data_format in enumerate(url_formats):
                     try:
-                        error_json = response.json()
-                        logger.error(f"Error: {error_json}")
-                    except:
-                        logger.error(f"Response: {response.text[:200]}...")
+                        logger.info(f"Trying URL format {i+1}")
+                        
+                        response = requests.post(
+                            'https://api.printful.com/files',
+                            headers=headers,
+                            json=data_format,
+                            timeout=60,
+                            verify=False
+                        )
+                        
+                        if response.status_code == 200:
+                            logger.info(f"✅ File upload successful via URL method (format {i+1})")
+                            return response.json()
+                        else:
+                            logger.error(f"URL format {i+1} failed: {response.status_code}")
+                            try:
+                                error_json = response.json()
+                                logger.error(f"Error: {error_json}")
+                            except:
+                                logger.error(f"Response: {response.text[:100]}...")
+                                
+                    except Exception as e:
+                        logger.error(f"URL format {i+1} exception: {e}")
+                        continue
             
             # Method 2: Direct multipart upload with correct format
             logger.info("Trying direct multipart upload to Printful...")
