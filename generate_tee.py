@@ -168,10 +168,27 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             # Decode base64 image data
             image_bytes = base64.b64decode(image_data)
             
-            # Printful expects files as an array using repeated field names
-            # Even for single file, use array format with repeated 'file' field name
-            files = [
-                ('file', (filename, image_bytes, 'image/png'))
+            # Try different approaches for "file element is not array" error
+            approaches = [
+                # Approach 1: 'files' field (plural) as array
+                {
+                    'files': [('files', (filename, image_bytes, 'image/png'))],
+                    'desc': "'files' field as array"
+                },
+                # Approach 2: Multiple 'file' entries (what the error suggests)  
+                {
+                    'files': [('file', (filename, image_bytes, 'image/png'))],
+                    'desc': "multiple 'file' entries"
+                },
+                # Approach 3: JSON format instead of multipart
+                {
+                    'json_data': {
+                        'files': [{'content': image_data, 'filename': filename, 'type': 'image/png'}],
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    },
+                    'desc': "JSON base64 format"
+                }
             ]
             
             # Form data with store_id
@@ -180,29 +197,53 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 'store_id': self.printful_store_id
             }
             
-            logger.info(f"Uploading to Printful with proper array format (repeated field names)")
-            
-            # Upload to Printful file library using array format
-            response = requests.post(
-                'https://api.printful.com/files',
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=60,
-                verify=False
-            )
-            
-            if response.status_code == 200:
-                logger.info(f"✅ File upload successful")
-                return response.json()
-            else:
-                logger.error(f"Printful upload failed with status {response.status_code}")
+            for i, approach in enumerate(approaches):
+                logger.info(f"Attempt {i+1}: Trying {approach['desc']}")
+                
                 try:
-                    error_json = response.json()
-                    logger.error(f"Error: {error_json}")
-                except:
-                    logger.error(f"Response: {response.text[:200]}...")
-                response.raise_for_status()
+                    if 'json_data' in approach:
+                        # JSON approach
+                        headers_json = headers.copy()
+                        headers_json['Content-Type'] = 'application/json'
+                        response = requests.post(
+                            'https://api.printful.com/files',
+                            headers=headers_json,
+                            json=approach['json_data'],
+                            timeout=60,
+                            verify=False
+                        )
+                    else:
+                        # Multipart approach
+                        response = requests.post(
+                            'https://api.printful.com/files',
+                            headers=headers,
+                            files=approach['files'],
+                            data=data,
+                            timeout=60,
+                            verify=False
+                        )
+                    
+                    if response.status_code == 200:
+                        logger.info(f"✅ File upload successful with {approach['desc']}")
+                        return response.json()
+                    else:
+                        logger.error(f"Attempt {i+1} failed with status {response.status_code}")
+                        try:
+                            error_json = response.json()
+                            logger.error(f"Error: {error_json}")
+                        except:
+                            logger.error(f"Response: {response.text[:200]}...")
+                        
+                        # Continue to next approach
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Attempt {i+1} exception: {e}")
+                    continue
+            
+            # If all approaches failed
+            logger.error("All file upload approaches failed")
+            return None
                 
         except Exception as e:
             logger.error(f"Failed to upload file to Printful: {e}")
