@@ -1,0 +1,38 @@
+{
+  "brit-pride": {
+    "shopify_id": null,
+    "title": "Proper British",
+    "handle": "proper-british",
+    "theme": "British pride t-shirt design, Union Jack elements, tea culture, queue jokes, weather humor"
+  },
+  "brit-humour": {
+    "shopify_id": null,
+    "title": "British Banter",
+    "handle": "british-banter",
+    "theme": "British sarcasm t-shirt design, dry wit, taking the piss, understatement humor"
+  },
+  "pub-culture": {
+    "shopify_id": null,
+    "title": "Pub Life",
+    "handle": "pub-life",
+    "theme": "British pub culture t-shirt design, beer, Sunday roast, fancy a pint, local pub vibes"
+  },
+  "football-mad": {
+    "shopify_id": null,
+    "title": "Football Mad",
+    "handle": "football-mad",
+    "theme": "British football culture t-shirt design, coming home jokes, penalty shootouts, VAR complaints"
+  },
+  "tea-time": {
+    "shopify_id": null,
+    "title": "Tea Time",
+    "handle": "tea-time",
+    "theme": "British tea culture t-shirt design, proper brew, biscuits, milk first debate, cuppa jokes"
+  },
+  "weather-talk": {
+    "shopify_id": null,
+    "title": "Weather Talk",
+    "handle": "weather-talk",
+    "theme": "British weather obsession t-shirt design, rain jokes, sunshine panic, small talk culture"
+  }
+}
