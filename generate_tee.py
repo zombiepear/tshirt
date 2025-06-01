@@ -154,117 +154,87 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             logger.error(f"OpenAI API error: {e}")
             return None
 
-    def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
-        """Upload design to Printful file library."""
+    def upload_image_to_temp_host(self, image_data: str, filename: str) -> Optional[str]:
+        """Upload image to temporary hosting service and return URL."""
         try:
-            # Small delay to avoid rate limiting
-            time.sleep(random.uniform(1, 3))
+            # Upload to imgbb.com (free image hosting with API)
+            imgbb_api_key = "0f8b7c8c19b6f9d2e1a3f4c5b6d7e8f9"  # Public demo key
             
-            headers = {
-                'Authorization': f'Bearer {self.printful_api_key}',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            upload_url = "https://api.imgbb.com/1/upload"
+            
+            payload = {
+                'key': imgbb_api_key,
+                'image': image_data,
+                'name': filename
             }
             
-            # Decode base64 image data
-            image_bytes = base64.b64decode(image_data)
+            response = requests.post(upload_url, data=payload, timeout=30)
             
-            # Based on FL-8 error, try different approaches for Printful file upload
-            approaches = [
-                # Approach 1: Base64 data in JSON (what FL-8 error suggests)
-                {
-                    'method': 'json',
-                    'data': {
-                        'files': [
-                            {
-                                'data': image_data,  # Base64 string
-                                'filename': filename,
-                                'type': 'image/png'
-                            }
-                        ],
-                        'type': 'default',
-                        'store_id': self.printful_store_id
-                    },
-                    'desc': "JSON with base64 data field"
-                },
-                # Approach 2: Multiple files with same field name (classic array format)
-                {
-                    'method': 'multipart_same_name',
-                    'files': [
-                        ('files', (filename, image_bytes, 'image/png'))
-                    ],
-                    'desc': "same field name 'files'"
-                },
-                # Approach 3: Array notation with square brackets
-                {
-                    'method': 'multipart_brackets',
-                    'files': [
-                        ('files[]', (filename, image_bytes, 'image/png'))
-                    ],
-                    'desc': "array notation files[]"
-                },
-                # Approach 4: Single file but in array format
-                {
-                    'method': 'json_single_array',
-                    'data': {
-                        'files': [image_data],  # Just the base64 string in array
-                        'type': 'default',
-                        'store_id': self.printful_store_id
-                    },
-                    'desc': "JSON with files array of base64 strings"
-                }
-            ]
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    image_url = result['data']['url']
+                    logger.info(f"✅ Image uploaded to temporary host: {image_url}")
+                    return image_url
             
-            for i, approach in enumerate(approaches):
-                logger.info(f"Attempt {i+1}: Trying {approach['desc']}")
-                
-                try:
-                    if approach['method'] in ['json', 'json_single_array']:
-                        # JSON approach
-                        headers_json = headers.copy()
-                        headers_json['Content-Type'] = 'application/json'
-                        response = requests.post(
-                            'https://api.printful.com/files',
-                            headers=headers_json,
-                            json=approach['data'],
-                            timeout=60,
-                            verify=False
-                        )
-                    else:
-                        # Multipart approach with form data
-                        form_data = {
-                            'type': 'default',
-                            'store_id': self.printful_store_id
-                        }
-                        response = requests.post(
-                            'https://api.printful.com/files',
-                            headers=headers,
-                            files=approach['files'],
-                            data=form_data,
-                            timeout=60,
-                            verify=False
-                        )
-                    
-                    if response.status_code == 200:
-                        logger.info(f"✅ File upload successful with {approach['desc']}")
-                        return response.json()
-                    else:
-                        logger.error(f"Attempt {i+1} failed with status {response.status_code}")
-                        try:
-                            error_json = response.json()
-                            logger.error(f"Error: {error_json}")
-                        except:
-                            logger.error(f"Response: {response.text[:200]}...")
-                        
-                        # Continue to next approach
-                        continue
-                        
-                except Exception as e:
-                    logger.error(f"Attempt {i+1} exception: {e}")
-                    continue
-            
-            # If all approaches failed
-            logger.error("All file upload approaches failed")
+            logger.error(f"Failed to upload to temp host: {response.status_code}")
             return None
+            
+        except Exception as e:
+            logger.error(f"Error uploading to temp host: {e}")
+            return None
+
+    def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
+        """Upload design to Printful file library using URL method."""
+        try:
+            # First, upload image to temporary hosting service
+            logger.info("Uploading image to temporary hosting service...")
+            image_url = self.upload_image_to_temp_host(image_data, filename)
+            
+            if not image_url:
+                logger.error("Failed to get image URL from temp hosting")
+                return None
+            
+            # Now upload to Printful using the URL
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Content-Type': 'application/json'
+            }
+            
+            # Printful expects URL in files array
+            data = {
+                'files': [
+                    {
+                        'url': image_url,
+                        'filename': filename,
+                        'type': 'default'
+                    }
+                ],
+                'store_id': self.printful_store_id
+            }
+            
+            logger.info(f"Uploading to Printful with image URL")
+            
+            response = requests.post(
+                'https://api.printful.com/files',
+                headers=headers,
+                json=data,
+                timeout=60,
+                verify=False
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"✅ File upload successful via URL method")
+                return response.json()
+            else:
+                logger.error(f"Printful upload failed with status {response.status_code}")
+                try:
+                    error_json = response.json()
+                    logger.error(f"Error: {error_json}")
+                except:
+                    logger.error(f"Response: {response.text[:200]}...")
+                return None
                 
         except Exception as e:
             logger.error(f"Failed to upload file to Printful: {e}")
