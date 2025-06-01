@@ -23,6 +23,10 @@ jobs:
         ls -la
         echo "Looking for Python files:"
         find . -name "*.py" -type f
+        echo "Full path check:"
+        ls -la seed_collections.py 2>/dev/null || echo "seed_collections.py not found in current directory"
+        echo "Check if executable:"
+        test -x seed_collections.py && echo "seed_collections.py is executable" || echo "seed_collections.py is not executable"
       
     - name: Set up Python 3.12
       uses: actions/setup-python@v4
@@ -54,13 +58,13 @@ jobs:
       run: |
         if [ ! -f collections.json ]; then
           echo "Collections not found, running seed script..."
-          python seed_collections.py
+          python3 ./seed_collections.py
         else
           echo "Collections file exists, skipping seed..."
         fi
         
     - name: Generate daily T-shirts
-      run: python generate_tee.py
+      run: python3 ./generate_tee.py
       
     - name: Commit updated collections.json if changed
       run: |
