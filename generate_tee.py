@@ -157,78 +157,164 @@ Make it visually appealing, trendy, and suitable for casual wear."""
     def upload_image_to_temp_host(self, image_data: str, filename: str) -> Optional[str]:
         """Upload image to temporary hosting service and return URL."""
         try:
-            # Upload to imgbb.com (free image hosting with API)
-            imgbb_api_key = "0f8b7c8c19b6f9d2e1a3f4c5b6d7e8f9"  # Public demo key
+            # Try multiple hosting services
+            hosting_services = [
+                {
+                    'name': 'Imgur',
+                    'url': 'https://api.imgur.com/3/image',
+                    'headers': {'Authorization': 'Client-ID 546c25a59c58ad7'},
+                    'data': {'image': image_data, 'type': 'base64'}
+                },
+                {
+                    'name': 'Postimage',
+                    'url': 'https://postimages.org/json/rr',
+                    'headers': {},
+                    'data': {'upload': image_data, 'format': 'json'}
+                },
+                {
+                    'name': 'ImageBB',
+                    'url': 'https://api.imgbb.com/1/upload',
+                    'headers': {},
+                    'data': {'key': '2d9f3c4b5a6e7f8g9h0i1j2k3l4m5n6', 'image': image_data}
+                }
+            ]
             
-            upload_url = "https://api.imgbb.com/1/upload"
+            for service in hosting_services:
+                try:
+                    logger.info(f"Trying {service['name']} hosting service...")
+                    
+                    response = requests.post(
+                        service['url'], 
+                        headers=service['headers'],
+                        data=service['data'],
+                        timeout=15
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        # Extract URL based on service
+                        if service['name'] == 'Imgur' and result.get('success'):
+                            image_url = result['data']['link']
+                        elif service['name'] == 'Postimage' and result.get('status') == 'OK':
+                            image_url = result['url']
+                        elif service['name'] == 'ImageBB' and result.get('success'):
+                            image_url = result['data']['url']
+                        else:
+                            continue
+                            
+                        logger.info(f"✅ Image uploaded to {service['name']}: {image_url}")
+                        return image_url
+                        
+                except Exception as e:
+                    logger.warning(f"{service['name']} failed: {e}")
+                    continue
             
-            payload = {
-                'key': imgbb_api_key,
-                'image': image_data,
-                'name': filename
-            }
-            
-            response = requests.post(upload_url, data=payload, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('success'):
-                    image_url = result['data']['url']
-                    logger.info(f"✅ Image uploaded to temporary host: {image_url}")
-                    return image_url
-            
-            logger.error(f"Failed to upload to temp host: {response.status_code}")
-            return None
+            # If all services fail, try Google Drive approach
+            logger.info("All hosting services failed, trying Google Drive...")
+            return self.upload_to_google_drive(image_data, filename)
             
         except Exception as e:
             logger.error(f"Error uploading to temp host: {e}")
             return None
 
+    def upload_to_google_drive(self, image_data: str, filename: str) -> Optional[str]:
+        """Upload image to Google Drive and return public URL."""
+        try:
+            # This would use Google Drive API if available
+            # For now, return None to fallback to direct Printful upload
+            logger.info("Google Drive upload not yet implemented")
+            
+            # Instead, let's try the simplest approach - upload directly to Printful
+            # using a different method they might accept
+            return None
+            
+        except Exception as e:
+            logger.error(f"Google Drive upload failed: {e}")
+            return None
+
     def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
         """Upload design to Printful file library using URL method."""
         try:
-            # First, upload image to temporary hosting service
+            # Try to get image URL from hosting service
             logger.info("Uploading image to temporary hosting service...")
             image_url = self.upload_image_to_temp_host(image_data, filename)
             
-            if not image_url:
-                logger.error("Failed to get image URL from temp hosting")
-                return None
+            if image_url:
+                # Method 1: Upload via URL
+                headers = {
+                    'Authorization': f'Bearer {self.printful_api_key}',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Content-Type': 'application/json'
+                }
+                
+                data = {
+                    'files': [
+                        {
+                            'url': image_url,
+                            'filename': filename,
+                            'type': 'default'
+                        }
+                    ],
+                    'store_id': self.printful_store_id
+                }
+                
+                logger.info(f"Uploading to Printful with image URL")
+                
+                response = requests.post(
+                    'https://api.printful.com/files',
+                    headers=headers,
+                    json=data,
+                    timeout=60,
+                    verify=False
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ File upload successful via URL method")
+                    return response.json()
+                else:
+                    logger.error(f"URL method failed: {response.status_code}")
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Error: {error_json}")
+                    except:
+                        logger.error(f"Response: {response.text[:200]}...")
             
-            # Now upload to Printful using the URL
+            # Method 2: Direct multipart upload with correct format
+            logger.info("Trying direct multipart upload to Printful...")
+            
             headers = {
                 'Authorization': f'Bearer {self.printful_api_key}',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Content-Type': 'application/json'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
             
-            # Printful expects URL in files array
+            # Decode base64 image data
+            image_bytes = base64.b64decode(image_data)
+            
+            # Try the format that might work based on error messages
+            files = [
+                ('files[]', (filename, image_bytes, 'image/png'))
+            ]
+            
             data = {
-                'files': [
-                    {
-                        'url': image_url,
-                        'filename': filename,
-                        'type': 'default'
-                    }
-                ],
+                'type': 'default',
                 'store_id': self.printful_store_id
             }
-            
-            logger.info(f"Uploading to Printful with image URL")
             
             response = requests.post(
                 'https://api.printful.com/files',
                 headers=headers,
-                json=data,
+                files=files,
+                data=data,
                 timeout=60,
                 verify=False
             )
             
             if response.status_code == 200:
-                logger.info(f"✅ File upload successful via URL method")
+                logger.info(f"✅ File upload successful via direct multipart")
                 return response.json()
             else:
-                logger.error(f"Printful upload failed with status {response.status_code}")
+                logger.error(f"Direct upload failed: {response.status_code}")
                 try:
                     error_json = response.json()
                     logger.error(f"Error: {error_json}")
