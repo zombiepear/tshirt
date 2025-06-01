@@ -58,14 +58,12 @@ jobs:
         echo "PRINTFUL_STORE_ID=${{ secrets.PRINTFUL_STORE_ID }}" >> .env
         echo "MARKUP_PERCENT=${{ secrets.MARKUP_PERCENT }}" >> .env
         
-    - name: Check if collections exist
+    - name: Force regenerate collections with celebration themes
       run: |
-        if [ ! -f collections.json ]; then
-          echo "Collections not found, running seed script..."
-          python3 ./seed_collections.py
-        else
-          echo "Collections file exists, skipping seed..."
-        fi
+        # Remove old collections to force recreation with new celebration themes
+        rm -f collections.json
+        echo "Regenerating collections with celebration themes..."
+        python3 ./seed_collections.py
         
     - name: Generate daily T-shirts
       run: python3 ./generate_tee.py
@@ -74,10 +72,12 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        if [ -f collections.json ]; then
-          git add collections.json
-          git diff --staged --quiet || git commit -m "Update collections.json [skip ci]"
-          git push || echo "No changes to push"
+        git add collections.json || true
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update collections.json [skip ci]"
+          git push
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
