@@ -1,0 +1,66 @@
+name: Daily T-Shirt Generation
+
+on:
+  schedule:
+    # Run daily at 08:00 UK time (07:00 UTC in winter, 08:00 UTC in summer)
+    # Using 07:00 UTC to handle both GMT and BST
+    - cron: '0 7 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  generate-tshirts:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create .env file from secrets
+      run: |
+        echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+        echo "SHOPIFY_STORE=${{ secrets.SHOPIFY_STORE }}" >> .env
+        echo "SHOPIFY_ACCESS_TOKEN=${{ secrets.SHOPIFY_ACCESS_TOKEN }}" >> .env
+        echo "PRINTFUL_API_KEY=${{ secrets.PRINTFUL_API_KEY }}" >> .env
+        echo "MARKUP_PERCENT=${{ secrets.MARKUP_PERCENT }}" >> .env
+        
+    - name: Check if collections exist
+      run: |
+        if [ ! -f collections.json ]; then
+          echo "Collections not found, running seed script..."
+          python seed_collections.py
+        else
+          echo "Collections file exists, skipping seed..."
+        fi
+        
+    - name: Generate daily T-shirts
+      run: python generate_tee.py
+      
+    - name: Commit updated collections.json if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        if [ -f collections.json ]; then
+          git add collections.json
+          git diff --staged --quiet || git commit -m "Update collections.json [skip ci]"
+          git push || echo "No changes to push"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
