@@ -48,6 +48,9 @@ class TShirtGenerator:
         if missing_vars:
             raise ValueError(f"Missing required environment variables: {missing_vars}")
         
+        # Debug: Verify Printful access
+        self.verify_printful_access()
+        
         # Load collections mapping
         try:
             with open('collections.json', 'r') as f:
@@ -63,6 +66,43 @@ class TShirtGenerator:
             4011, 4012, 4013, 4014, 4017,  # S, M, L, XL, 2XL in White
             4016, 4018, 4019, 4020, 4021   # S, M, L, XL, 2XL in Black
         ]
+
+    def verify_printful_access(self):
+        """Verify Printful API access and store information."""
+        try:
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            # Try to get store info
+            response = requests.get(
+                'https://api.printful.com/store',
+                headers=headers,
+                timeout=30,
+                verify=False
+            )
+            
+            if response.status_code == 200:
+                stores = response.json()
+                logger.info(f"✅ Printful API access verified")
+                logger.info(f"Available stores: {len(stores.get('result', []))}")
+                
+                # Check if our store ID exists
+                if 'result' in stores:
+                    for store in stores['result']:
+                        logger.info(f"Store: {store.get('name', 'Unknown')} (ID: {store.get('id', 'Unknown')})")
+                        if str(store.get('id')) == str(self.printful_store_id):
+                            logger.info(f"✅ Found matching store ID: {self.printful_store_id}")
+                            return
+                
+                logger.warning(f"⚠️ Store ID {self.printful_store_id} not found in available stores")
+            else:
+                logger.error(f"❌ Printful API access failed: {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                
+        except Exception as e:
+            logger.error(f"Failed to verify Printful access: {e}")
 
     def generate_design_prompt(self, collection_key: str, theme: str) -> str:
         """Generate a detailed prompt for DALL-E based on collection theme."""
@@ -148,9 +188,23 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                     'type': 'default'
                 }
                 
-                # Upload to Printful file library (include store_id as parameter)
+                # Try different endpoints based on attempt
+                if attempt == 0:
+                    # First try: general endpoint without store_id
+                    url = 'https://api.printful.com/files'
+                    logger.info(f"Attempt {attempt + 1}: Trying general files endpoint")
+                elif attempt == 1:
+                    # Second try: with store_id as parameter
+                    url = f'https://api.printful.com/files?store_id={self.printful_store_id}'
+                    logger.info(f"Attempt {attempt + 1}: Trying with store_id parameter")
+                else:
+                    # Third try: store-specific endpoint
+                    url = f'https://api.printful.com/store/{self.printful_store_id}/files'
+                    logger.info(f"Attempt {attempt + 1}: Trying store-specific endpoint")
+                
+                # Upload to Printful file library
                 response = requests.post(
-                    f'https://api.printful.com/files?store_id={self.printful_store_id}',
+                    url,
                     headers=headers,
                     files=files,
                     data=data,
@@ -159,10 +213,11 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 )
                 
                 if response.status_code == 200:
+                    logger.info(f"✅ File upload successful on attempt {attempt + 1}")
                     return response.json()
                 elif response.status_code == 403 and attempt < max_retries - 1:
                     logger.warning(f"Printful upload blocked (attempt {attempt + 1}/{max_retries}), retrying...")
-                    time.sleep(random.uniform(2, 5))  # Longer delay before retry
+                    time.sleep(random.uniform(3, 6))  # Longer delay before retry
                     continue
                 else:
                     logger.error(f"Printful upload failed with status {response.status_code}")
@@ -175,6 +230,7 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                         logger.error(f"Response: {response.text[:200]}...")
                     
                     if attempt < max_retries - 1:
+                        time.sleep(random.uniform(2, 4))
                         continue
                     else:
                         response.raise_for_status()
