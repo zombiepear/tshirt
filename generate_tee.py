@@ -75,9 +75,9 @@ class TShirtGenerator:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
             
-            # Try to get store info
+            # Try to get stores list (note: plural 'stores')
             response = requests.get(
-                'https://api.printful.com/store',
+                'https://api.printful.com/stores',
                 headers=headers,
                 timeout=30,
                 verify=False
@@ -155,78 +155,55 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             return None
 
     def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
-        """Upload design to Printful file library with retry logic."""
+        """Upload design to Printful file library."""
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
-                # Random delay to avoid rate limiting and look more natural
+                # Random delay to avoid rate limiting
                 delay = random.uniform(1, 3)
                 time.sleep(delay)
                 
                 headers = {
                     'Authorization': f'Bearer {self.printful_api_key}',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'cross-site'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                 }
                 
                 # Decode base64 image data
                 image_bytes = base64.b64decode(image_data)
                 
-                # Prepare the file upload with proper format
+                # Prepare the file upload - simple multipart format
                 files = {
                     'file': (filename, image_bytes, 'image/png')
                 }
                 
+                # Include store_id in form data instead of URL parameter
                 data = {
-                    'type': 'default'
+                    'type': 'default',
+                    'store_id': self.printful_store_id
                 }
                 
-                # Try different endpoints based on attempt
-                if attempt == 0:
-                    # First try: general endpoint without store_id
-                    url = 'https://api.printful.com/files'
-                    logger.info(f"Attempt {attempt + 1}: Trying general files endpoint")
-                elif attempt == 1:
-                    # Second try: with store_id as parameter
-                    url = f'https://api.printful.com/files?store_id={self.printful_store_id}'
-                    logger.info(f"Attempt {attempt + 1}: Trying with store_id parameter")
-                else:
-                    # Third try: store-specific endpoint
-                    url = f'https://api.printful.com/store/{self.printful_store_id}/files'
-                    logger.info(f"Attempt {attempt + 1}: Trying store-specific endpoint")
+                logger.info(f"Attempt {attempt + 1}: Uploading to Printful with store_id in form data")
                 
                 # Upload to Printful file library
                 response = requests.post(
-                    url,
+                    'https://api.printful.com/files',
                     headers=headers,
                     files=files,
                     data=data,
                     timeout=60,
-                    verify=False  # Handle SSL in GitHub Actions
+                    verify=False
                 )
                 
                 if response.status_code == 200:
                     logger.info(f"✅ File upload successful on attempt {attempt + 1}")
                     return response.json()
-                elif response.status_code == 403 and attempt < max_retries - 1:
-                    logger.warning(f"Printful upload blocked (attempt {attempt + 1}/{max_retries}), retrying...")
-                    time.sleep(random.uniform(3, 6))  # Longer delay before retry
-                    continue
                 else:
                     logger.error(f"Printful upload failed with status {response.status_code}")
                     try:
-                        # Try to decode JSON error message
                         error_json = response.json()
                         logger.error(f"Error: {error_json}")
                     except:
-                        # Fallback for non-JSON responses (like Cloudflare blocks)
                         logger.error(f"Response: {response.text[:200]}...")
                     
                     if attempt < max_retries - 1:
