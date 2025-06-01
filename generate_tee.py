@@ -115,25 +115,37 @@ Make it visually appealing, trendy, and suitable for casual wear."""
     def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
         """Upload design to Printful file library."""
         try:
-            # Prepare the file upload
-            files = {
-                'file': (filename, base64.b64decode(image_data), 'image/png')
-            }
-            
             headers = {
                 'Authorization': f'Bearer {self.printful_api_key}'
             }
             
+            # Decode base64 image data
+            image_bytes = base64.b64decode(image_data)
+            
+            # Prepare the file upload with proper format
+            files = {
+                'file': (filename, image_bytes, 'image/png')
+            }
+            
+            data = {
+                'type': 'default'
+            }
+            
             # Upload to Printful file library
             response = requests.post(
-                f'https://api.printful.com/files',
+                'https://api.printful.com/files',
                 headers=headers,
                 files=files,
+                data=data,
                 timeout=60,
                 verify=False  # Handle SSL in GitHub Actions
             )
-            response.raise_for_status()
             
+            if response.status_code != 200:
+                logger.error(f"Printful upload failed with status {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                
+            response.raise_for_status()
             return response.json()
             
         except Exception as e:
@@ -288,7 +300,11 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             return None
 
     def add_product_to_collection(self, product_id: str, collection_id: str) -> bool:
-        """Add product to Shopify collection."""
+        """Add product to Shopify collection (skip if no collection ID)."""
+        if not collection_id:
+            logger.info("No collection ID provided, skipping collection assignment")
+            return True
+            
         try:
             headers = {
                 'X-Shopify-Access-Token': self.shopify_access_token,
@@ -330,7 +346,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             try:
                 collection = self.collections[collection_key]
                 theme = collection['theme']
-                collection_id = collection['shopify_id']
+                collection_id = collection.get('shopify_id')
+                if collection_id == "None" or collection_id is None:
+                    collection_id = None
                 
                 logger.info(f"Generating design for {collection_key}: {theme}")
                 
@@ -390,8 +408,10 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 logger.info(f"Shopify product created: {shopify_product_id}")
                 
                 # Add to collection
-                if collection_id:
+                if collection_id and collection_id != "None":
                     self.add_product_to_collection(shopify_product_id, collection_id)
+                else:
+                    logger.info("No collection ID available, product will be ungrouped")
                 
                 result = {
                     'collection_key': collection_key,
