@@ -11,6 +11,7 @@ import requests
 import urllib3
 import base64
 import time
+import random
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
@@ -114,54 +115,79 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             return None
 
     def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
-        """Upload design to Printful file library."""
-        try:
-            headers = {
-                'Authorization': f'Bearer {self.printful_api_key}',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'cross-site'
-            }
-            
-            # Decode base64 image data
-            image_bytes = base64.b64decode(image_data)
-            
-            # Prepare the file upload with proper format
-            files = {
-                'file': (filename, image_bytes, 'image/png')
-            }
-            
-            data = {
-                'type': 'default'
-            }
-            
-            # Upload to Printful file library
-            response = requests.post(
-                'https://api.printful.com/files',
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=60,
-                verify=False  # Handle SSL in GitHub Actions
-            )
-            
-            if response.status_code != 200:
-                logger.error(f"Printful upload failed with status {response.status_code}")
-                logger.error(f"Response: {response.text[:500]}...")  # Truncate long HTML responses
+        """Upload design to Printful file library with retry logic."""
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Random delay to avoid rate limiting and look more natural
+                delay = random.uniform(1, 3)
+                time.sleep(delay)
                 
-            response.raise_for_status()
-            return response.json()
-            
-        except Exception as e:
-            logger.error(f"Failed to upload file to Printful: {e}")
-            if hasattr(e, 'response') and e.response:
-                logger.error(f"Response: {e.response.text[:200]}...")  # Truncate for readability
-            return None
+                headers = {
+                    'Authorization': f'Bearer {self.printful_api_key}',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'cross-site'
+                }
+                
+                # Decode base64 image data
+                image_bytes = base64.b64decode(image_data)
+                
+                # Prepare the file upload with proper format
+                files = {
+                    'file': (filename, image_bytes, 'image/png')
+                }
+                
+                data = {
+                    'type': 'default'
+                }
+                
+                # Upload to Printful file library (store-specific endpoint)
+                response = requests.post(
+                    f'https://api.printful.com/store/{self.printful_store_id}/files',
+                    headers=headers,
+                    files=files,
+                    data=data,
+                    timeout=60,
+                    verify=False  # Handle SSL in GitHub Actions
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 403 and attempt < max_retries - 1:
+                    logger.warning(f"Printful upload blocked (attempt {attempt + 1}/{max_retries}), retrying...")
+                    time.sleep(random.uniform(2, 5))  # Longer delay before retry
+                    continue
+                else:
+                    logger.error(f"Printful upload failed with status {response.status_code}")
+                    try:
+                        # Try to decode JSON error message
+                        error_json = response.json()
+                        logger.error(f"Error: {error_json}")
+                    except:
+                        # Fallback for non-JSON responses (like Cloudflare blocks)
+                        logger.error(f"Response: {response.text[:200]}...")
+                    
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        response.raise_for_status()
+                
+            except Exception as e:
+                logger.error(f"Upload attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(random.uniform(2, 5))
+                    continue
+                else:
+                    return None
+        
+        return None
 
     def create_printful_product(self, file_info: Dict, title: str, collection_key: str) -> Optional[Dict]:
         """Create product in Printful store."""
