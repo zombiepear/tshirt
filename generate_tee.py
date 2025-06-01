@@ -156,71 +156,76 @@ Make it visually appealing, trendy, and suitable for casual wear."""
 
     def upload_to_printful(self, image_data: str, filename: str) -> Optional[Dict]:
         """Upload design to Printful file library."""
-        max_retries = 3
-        
-        for attempt in range(max_retries):
-            try:
-                # Random delay to avoid rate limiting
-                delay = random.uniform(1, 3)
-                time.sleep(delay)
+        try:
+            # Small delay to avoid rate limiting
+            time.sleep(random.uniform(1, 3))
+            
+            headers = {
+                'Authorization': f'Bearer {self.printful_api_key}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            # Decode base64 image data
+            image_bytes = base64.b64decode(image_data)
+            
+            # Try the simplest approach first - single file with 'file' field name
+            files = {
+                'file': (filename, image_bytes, 'image/png')
+            }
+            
+            # Form data with store_id
+            data = {
+                'type': 'default',
+                'store_id': self.printful_store_id
+            }
+            
+            logger.info(f"Uploading to Printful with single 'file' field")
+            
+            # Upload to Printful file library
+            response = requests.post(
+                'https://api.printful.com/files',
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=60,
+                verify=False
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"✅ File upload successful")
+                return response.json()
+            else:
+                logger.error(f"Printful upload failed with status {response.status_code}")
+                try:
+                    error_json = response.json()
+                    logger.error(f"Error: {error_json}")
+                    # If it's still the array error, try the array format
+                    if "file element is not array" in str(error_json):
+                        logger.info("Trying array format due to 'file element is not array' error...")
+                        # Use proper array format for multipart
+                        files_array = [
+                            ('file[]', (filename, image_bytes, 'image/png'))
+                        ]
+                        response = requests.post(
+                            'https://api.printful.com/files',
+                            headers=headers,
+                            files=files_array,
+                            data=data,
+                            timeout=60,
+                            verify=False
+                        )
+                        if response.status_code == 200:
+                            logger.info(f"✅ File upload successful with array format")
+                            return response.json()
+                        else:
+                            logger.error(f"Array format also failed: {response.status_code}")
+                except:
+                    logger.error(f"Response: {response.text[:200]}...")
+                response.raise_for_status()
                 
-                headers = {
-                    'Authorization': f'Bearer {self.printful_api_key}',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-                
-                # Decode base64 image data
-                image_bytes = base64.b64decode(image_data)
-                
-                # Prepare the file upload - simple multipart format
-                files = {
-                    'file': (filename, image_bytes, 'image/png')
-                }
-                
-                # Include store_id in form data instead of URL parameter
-                data = {
-                    'type': 'default',
-                    'store_id': self.printful_store_id
-                }
-                
-                logger.info(f"Attempt {attempt + 1}: Uploading to Printful with store_id in form data")
-                
-                # Upload to Printful file library
-                response = requests.post(
-                    'https://api.printful.com/files',
-                    headers=headers,
-                    files=files,
-                    data=data,
-                    timeout=60,
-                    verify=False
-                )
-                
-                if response.status_code == 200:
-                    logger.info(f"✅ File upload successful on attempt {attempt + 1}")
-                    return response.json()
-                else:
-                    logger.error(f"Printful upload failed with status {response.status_code}")
-                    try:
-                        error_json = response.json()
-                        logger.error(f"Error: {error_json}")
-                    except:
-                        logger.error(f"Response: {response.text[:200]}...")
-                    
-                    if attempt < max_retries - 1:
-                        time.sleep(random.uniform(2, 4))
-                        continue
-                    else:
-                        response.raise_for_status()
-                
-            except Exception as e:
-                logger.error(f"Upload attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(random.uniform(2, 5))
-                    continue
-                else:
-                    return None
-        
-        return None
+        except Exception as e:
+            logger.error(f"Failed to upload file to Printful: {e}")
+            return None
 
     def create_printful_product(self, file_info: Dict, title: str, collection_key: str) -> Optional[Dict]:
         """Create product in Printful store."""
