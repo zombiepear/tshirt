@@ -168,57 +168,78 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             # Decode base64 image data
             image_bytes = base64.b64decode(image_data)
             
-            # Try different approaches for "file element is not array" error
+            # Based on FL-8 error, try different approaches for Printful file upload
             approaches = [
-                # Approach 1: 'files' field (plural) as array
+                # Approach 1: Base64 data in JSON (what FL-8 error suggests)
                 {
-                    'files': [('files', (filename, image_bytes, 'image/png'))],
-                    'desc': "'files' field as array"
-                },
-                # Approach 2: Multiple 'file' entries (what the error suggests)  
-                {
-                    'files': [('file', (filename, image_bytes, 'image/png'))],
-                    'desc': "multiple 'file' entries"
-                },
-                # Approach 3: JSON format instead of multipart
-                {
-                    'json_data': {
-                        'files': [{'content': image_data, 'filename': filename, 'type': 'image/png'}],
+                    'method': 'json',
+                    'data': {
+                        'files': [
+                            {
+                                'data': image_data,  # Base64 string
+                                'filename': filename,
+                                'type': 'image/png'
+                            }
+                        ],
                         'type': 'default',
                         'store_id': self.printful_store_id
                     },
-                    'desc': "JSON base64 format"
+                    'desc': "JSON with base64 data field"
+                },
+                # Approach 2: Multiple files with same field name (classic array format)
+                {
+                    'method': 'multipart_same_name',
+                    'files': [
+                        ('files', (filename, image_bytes, 'image/png'))
+                    ],
+                    'desc': "same field name 'files'"
+                },
+                # Approach 3: Array notation with square brackets
+                {
+                    'method': 'multipart_brackets',
+                    'files': [
+                        ('files[]', (filename, image_bytes, 'image/png'))
+                    ],
+                    'desc': "array notation files[]"
+                },
+                # Approach 4: Single file but in array format
+                {
+                    'method': 'json_single_array',
+                    'data': {
+                        'files': [image_data],  # Just the base64 string in array
+                        'type': 'default',
+                        'store_id': self.printful_store_id
+                    },
+                    'desc': "JSON with files array of base64 strings"
                 }
             ]
-            
-            # Form data with store_id
-            data = {
-                'type': 'default',
-                'store_id': self.printful_store_id
-            }
             
             for i, approach in enumerate(approaches):
                 logger.info(f"Attempt {i+1}: Trying {approach['desc']}")
                 
                 try:
-                    if 'json_data' in approach:
+                    if approach['method'] in ['json', 'json_single_array']:
                         # JSON approach
                         headers_json = headers.copy()
                         headers_json['Content-Type'] = 'application/json'
                         response = requests.post(
                             'https://api.printful.com/files',
                             headers=headers_json,
-                            json=approach['json_data'],
+                            json=approach['data'],
                             timeout=60,
                             verify=False
                         )
                     else:
-                        # Multipart approach
+                        # Multipart approach with form data
+                        form_data = {
+                            'type': 'default',
+                            'store_id': self.printful_store_id
+                        }
                         response = requests.post(
                             'https://api.printful.com/files',
                             headers=headers,
                             files=approach['files'],
-                            data=data,
+                            data=form_data,
                             timeout=60,
                             verify=False
                         )
