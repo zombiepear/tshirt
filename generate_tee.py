@@ -168,10 +168,11 @@ Make it visually appealing, trendy, and suitable for casual wear."""
             # Decode base64 image data
             image_bytes = base64.b64decode(image_data)
             
-            # Try the simplest approach first - single file with 'file' field name
-            files = {
-                'file': (filename, image_bytes, 'image/png')
-            }
+            # Printful expects files as an array using repeated field names
+            # Even for single file, use array format with repeated 'file' field name
+            files = [
+                ('file', (filename, image_bytes, 'image/png'))
+            ]
             
             # Form data with store_id
             data = {
@@ -179,9 +180,9 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 'store_id': self.printful_store_id
             }
             
-            logger.info(f"Uploading to Printful with single 'file' field")
+            logger.info(f"Uploading to Printful with proper array format (repeated field names)")
             
-            # Upload to Printful file library
+            # Upload to Printful file library using array format
             response = requests.post(
                 'https://api.printful.com/files',
                 headers=headers,
@@ -199,26 +200,6 @@ Make it visually appealing, trendy, and suitable for casual wear."""
                 try:
                     error_json = response.json()
                     logger.error(f"Error: {error_json}")
-                    # If it's still the array error, try the array format
-                    if "file element is not array" in str(error_json):
-                        logger.info("Trying array format due to 'file element is not array' error...")
-                        # Use proper array format for multipart
-                        files_array = [
-                            ('file[]', (filename, image_bytes, 'image/png'))
-                        ]
-                        response = requests.post(
-                            'https://api.printful.com/files',
-                            headers=headers,
-                            files=files_array,
-                            data=data,
-                            timeout=60,
-                            verify=False
-                        )
-                        if response.status_code == 200:
-                            logger.info(f"✅ File upload successful with array format")
-                            return response.json()
-                        else:
-                            logger.error(f"Array format also failed: {response.status_code}")
                 except:
                     logger.error(f"Response: {response.text[:200]}...")
                 response.raise_for_status()
