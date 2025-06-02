@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 T-Shirt Generator for Printful and Shopify
-Generates AI designs and creates products on both platforms
+Designed for GitHub Actions - uses environment variables from secrets
 """
 
 import os
@@ -13,10 +13,6 @@ import base64
 from datetime import datetime
 from typing import Dict, List, Optional
 from openai import OpenAI
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -31,20 +27,20 @@ logger = logging.getLogger(__name__)
 
 class TShirtGenerator:
     def __init__(self):
-        """Initialize with API configurations."""
-        # Load API keys - exact names from your GitHub secrets
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.printful_api_key = os.getenv('PRINTFUL_API_KEY')
-        self.printful_store_id = os.getenv('PRINTFUL_STORE_ID')
-        self.shopify_store = os.getenv('SHOPIFY_STORE')
-        self.shopify_access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
-        self.markup_percent = float(os.getenv('MARKUP_PERCENT', '1.4'))
+        """Initialize with environment variables from GitHub secrets."""
+        # Get API keys from environment (set by GitHub Actions)
+        self.openai_api_key = os.environ.get('OPENAI_API_KEY')
+        self.printful_api_key = os.environ.get('PRINTFUL_API_KEY')
+        self.printful_store_id = os.environ.get('PRINTFUL_STORE_ID')
+        self.shopify_store = os.environ.get('SHOPIFY_STORE')
+        self.shopify_access_token = os.environ.get('SHOPIFY_ACCESS_TOKEN')
+        self.markup_percent = float(os.environ.get('MARKUP_PERCENT', '1.4'))
         
         # Validate required keys
         if not self.openai_api_key:
-            raise ValueError("Missing OPENAI_API_KEY")
+            raise ValueError("Missing OPENAI_API_KEY in environment")
         if not self.printful_api_key:
-            raise ValueError("Missing PRINTFUL_API_KEY")
+            raise ValueError("Missing PRINTFUL_API_KEY in environment")
         
         # Initialize OpenAI
         self.openai_client = OpenAI(api_key=self.openai_api_key)
@@ -97,18 +93,14 @@ class TShirtGenerator:
                 }
         except Exception as e:
             logger.error(f"❌ Error loading collections: {e}")
-            return self._get_default_collections()
-    
-    def _get_default_collections(self) -> Dict:
-        """Return default collection if file not found."""
-        return {
-            "general": {
-                "name": "General Designs",
-                "title": "AI T-Shirt Design",
-                "theme": "Creative and unique t-shirt design",
-                "tags": ["creative", "unique", "ai"]
+            return {
+                "general": {
+                    "name": "General Designs",
+                    "title": "AI T-Shirt Design",
+                    "theme": "Creative and unique t-shirt design",
+                    "tags": ["creative", "unique", "ai"]
+                }
             }
-        }
     
     def _verify_printful_connection(self) -> None:
         """Verify Printful API access."""
@@ -231,8 +223,7 @@ class TShirtGenerator:
             product_data = {
                 "sync_product": {
                     "external_id": f"TSHIRT_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                    "name": title,
-                    "thumbnail": f"https://files.cdn.printful.com/files/{file_id}/preview.png"
+                    "name": title
                 },
                 "sync_variants": []
             }
@@ -380,8 +371,11 @@ class TShirtGenerator:
                     logger.error(f"❌ Failed to generate design for {category_key}")
                     continue
                 
-                # Create filename
+                # Save image locally for artifact upload
                 filename = f"{category_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                with open(filename, 'wb') as f:
+                    f.write(design['image_data'])
+                logger.info(f"💾 Saved design as {filename}")
                 
                 # Upload to Printful
                 file_id = self.upload_to_printful(design['image_data'], filename)
@@ -425,6 +419,9 @@ class TShirtGenerator:
 
 def main():
     """Run a single generation cycle."""
+    logger.info("🚀 Starting T-Shirt Generator")
+    logger.info(f"📍 Running in: {'GitHub Actions' if os.environ.get('GITHUB_ACTIONS') else 'Local environment'}")
+    
     try:
         generator = TShirtGenerator()
         generator.generate_daily_designs()
@@ -432,6 +429,7 @@ def main():
         logger.error(f"❌ Fatal error: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        exit(1)
 
 
 if __name__ == "__main__":
