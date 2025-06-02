@@ -1,0 +1,75 @@
+name: Test Printful Upload
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+  push:
+    paths:
+      - 'test_printful_upload.py'
+      - '.github/workflows/test-printful.yml'
+
+jobs:
+  test-upload-methods:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install minimal dependencies
+      run: |
+        pip install requests Pillow
+        echo "📦 Installed packages:"
+        pip list
+    
+    - name: Test Printful Upload Methods
+      env:
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+      run: |
+        echo "🔍 Testing Printful API Upload Methods"
+        echo "========================================="
+        python test_printful_upload.py
+    
+    - name: Check API with curl
+      env:
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+      run: |
+        echo -e "\n📡 Testing API with curl..."
+        echo "========================================="
+        
+        # Test store access
+        echo -e "\n1️⃣ Testing Store Access:"
+        curl -s -X GET "https://api.printful.com/stores/$PRINTFUL_STORE_ID" \
+          -H "Authorization: Bearer $PRINTFUL_API_KEY" | head -n 5
+        
+        # Test file upload endpoint
+        echo -e "\n\n2️⃣ Testing File Upload Endpoint (OPTIONS):"
+        curl -s -X OPTIONS "https://api.printful.com/files" \
+          -H "Authorization: Bearer $PRINTFUL_API_KEY" \
+          -H "Access-Control-Request-Method: POST" \
+          -H "Access-Control-Request-Headers: authorization,content-type" \
+          -i | head -n 10
+    
+    - name: Save test output
+      if: always()
+      run: |
+        echo "📝 Saving test results..."
+        mkdir -p test-results
+        echo "Test run at: $(date)" > test-results/test-info.txt
+        echo "GitHub Run: ${{ github.run_number }}" >> test-results/test-info.txt
+    
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: printful-test-results-${{ github.run_number }}
+        path: |
+          test-results/
+          *.log
+        retention-days: 7
