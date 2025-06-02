@@ -27,8 +27,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 # Set up logging
+log_level = logging.DEBUG if os.environ.get('DEBUG') else logging.INFO
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('tshirt_generator.log'),
@@ -43,11 +44,11 @@ class CloudflareBypassSession(requests.Session):
     def __init__(self):
         super().__init__()
         
-        # Set up retry strategy
+        # Set up retry strategy with more aggressive retries
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
+            total=5,
+            backoff_factor=2,
+            status_forcelist=[403, 429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"]
         )
         
@@ -57,20 +58,23 @@ class CloudflareBypassSession(requests.Session):
         
         # Set realistic headers to avoid Cloudflare detection
         self.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
             'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"macOS"',
+            'Sec-Ch-Ua-Platform': '"Windows"',
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Site': 'cross-site',
             'Referer': 'https://www.printful.com/',
-            'Origin': 'https://www.printful.com'
+            'Origin': 'https://www.printful.com',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         })
 
 class TShirtGenerator:
@@ -113,7 +117,7 @@ class TShirtGenerator:
         self.printful_headers = {
             'Authorization': f'Bearer {self.printful_api_key}',
             'Content-Type': 'application/json',
-            'X-PF-Store-Id': self.store_id  # Some Printful endpoints prefer this
+            'X-PF-Store-Id': str(self.store_id)  # Ensure it's a string
         }
         
         # Collection themes with Printful variant IDs
@@ -176,26 +180,47 @@ class TShirtGenerator:
         }
         
         logger.info(f"✅ Loaded {len(self.collections)} collections")
+        logger.info(f"🏪 Store ID: {self.store_id}")
     
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         """Make a request with retry logic and Cloudflare handling."""
-        max_retries = 3
-        retry_delay = 1
+        max_retries = 5
+        retry_delay = 2
         
         for attempt in range(max_retries):
             try:
                 # Add small random delay to appear more human
-                time.sleep(random.uniform(0.5, 1.5))
+                if attempt > 0:
+                    time.sleep(random.uniform(1, 3))
                 
                 # Make the request
                 response = self.session.request(method, url, **kwargs)
                 
                 # Check for Cloudflare challenge
-                if response.status_code == 403 or "cf-ray" in response.headers:
-                    logger.warning(f"Cloudflare challenge detected on attempt {attempt + 1}")
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay * (attempt + 1))
-                        continue
+                if response.status_code == 403:
+                    # Check if it's actually a Cloudflare challenge
+                    if 'cf-ray' in response.headers or 'cloudflare' in response.text.lower():
+                        logger.warning(f"Cloudflare challenge detected on attempt {attempt + 1}")
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay * (attempt + 1))
+                            continue
+                    else:
+                        # It's a real 403, not Cloudflare
+                        return response
+                
+                # If we get a successful response, return it
+                if response.status_code < 400:
+                    return response
+                
+                # For client errors (except 403), don't retry
+                if 400 <= response.status_code < 500 and response.status_code != 403:
+                    return response
+                
+                # For server errors, retry
+                if response.status_code >= 500 and attempt < max_retries - 1:
+                    logger.warning(f"Server error {response.status_code} on attempt {attempt + 1}, retrying...")
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
                 
                 return response
                 
@@ -224,7 +249,14 @@ class TShirtGenerator:
                 logger.info("✅ Printful API connection verified")
                 logger.info(f"📋 Store: {store_data['result']['name']}")
                 logger.info(f"📋 Type: {store_data['result']['type']}")
+                
+                # Log available endpoints for debugging
+                logger.info("📝 Checking available API endpoints...")
+                
                 return True
+            elif response.status_code == 403:
+                logger.error("❌ Access forbidden - check API key permissions")
+                return False
             else:
                 logger.error(f"❌ Printful API error: {response.status_code}")
                 logger.error(f"Response: {response.text}")
@@ -365,61 +397,184 @@ class TShirtGenerator:
     def upload_to_printful(self, image_data: bytes, filename: str) -> Optional[str]:
         """Upload design to Printful Files API."""
         try:
-            # Include store_id in the URL path
+            # First try multipart upload which seems to be what Printful prefers
+            logger.info("📤 Attempting multipart file upload...")
+            
             url = f'{self.printful_api_url}/files'
             
-            # Prepare the file data
-            files = {
-                'file': (filename, BytesIO(image_data), 'image/png')
-            }
+            # Prepare files as a list of tuples to create an array
+            # This is how requests handles array parameters
+            files = [
+                ('file', (filename, BytesIO(image_data), 'image/png'))
+            ]
             
-            # For file uploads, create custom headers without Content-Type
+            # Headers without Content-Type (let requests set it)
             upload_headers = {
-                'Authorization': f'Bearer {self.printful_api_key}',
-                'X-PF-Store-Id': self.store_id,
-                # Let requests set the Content-Type with boundary
+                'Authorization': f'Bearer {self.printful_api_key}'
             }
             
-            # Add form data for store_id
+            # Form data - include store_id
             data = {
                 'store_id': self.store_id
             }
             
-            # Make the upload request with our custom session
+            # Log request details for debugging
+            logger.debug(f"Upload URL: {url}")
+            logger.debug(f"Headers: {upload_headers}")
+            logger.debug(f"Form data: {data}")
+            
+            # Make the request
             response = self.make_request(
                 'POST',
                 url,
                 headers=upload_headers,
                 files=files,
                 data=data,
-                timeout=60  # Longer timeout for file uploads
+                timeout=60
             )
             
             if response.status_code in [200, 201]:
                 file_data = response.json()
-                file_id = file_data['result']['id']
-                file_url = file_data['result'].get('url', 'N/A')
-                logger.info(f"✅ Upload successful. File ID: {file_id}")
-                logger.info(f"📎 File URL: {file_url}")
-                return file_id
+                # Handle different response structures
+                if 'result' in file_data:
+                    if isinstance(file_data['result'], list) and len(file_data['result']) > 0:
+                        file_id = file_data['result'][0]['id']
+                        file_url = file_data['result'][0].get('url', 'N/A')
+                    elif isinstance(file_data['result'], dict):
+                        file_id = file_data['result']['id']
+                        file_url = file_data['result'].get('url', 'N/A')
+                    else:
+                        # Single file ID returned directly
+                        file_id = file_data['result']
+                        file_url = 'N/A'
+                    
+                    logger.info(f"✅ Upload successful. File ID: {file_id}")
+                    logger.info(f"📎 File URL: {file_url}")
+                    return str(file_id)
+                else:
+                    logger.error("Unexpected response structure")
+                    logger.error(f"Response: {json.dumps(file_data, indent=2)}")
+                    return None
             else:
                 logger.error(f"❌ Upload failed: {response.status_code}")
                 logger.error(f"Response: {response.text}")
                 
-                # Try to parse error details
-                try:
-                    error_data = response.json()
-                    if 'error' in error_data:
-                        logger.error(f"Error details: {error_data['error']}")
-                except:
-                    pass
-                    
-                return None
+                # Try alternative approaches
+                if "file element is not array" in response.text:
+                    # Try with file[] syntax
+                    return self._upload_with_array_syntax(image_data, filename)
+                else:
+                    # Try base64 method
+                    return self._upload_base64_fallback(image_data, filename)
                 
         except Exception as e:
             logger.error(f"❌ Error uploading to Printful: {e}")
             logger.error(f"Exception type: {type(e).__name__}")
-            return None
+            # Try fallback method
+            return self._upload_base64_fallback(image_data, filename)
+    
+    def _upload_with_array_syntax(self, image_data: bytes, filename: str) -> Optional[str]:
+        """Try upload with file[] array syntax."""
+        try:
+            logger.info("🔄 Trying file[] array syntax...")
+            
+            url = f'{self.printful_api_url}/files'
+            
+            # Use file[] syntax
+            files = [
+                ('file[]', (filename, BytesIO(image_data), 'image/png'))
+            ]
+            
+            upload_headers = {
+                'Authorization': f'Bearer {self.printful_api_key}'
+            }
+            
+            data = {
+                'store_id': self.store_id
+            }
+            
+            response = self.make_request(
+                'POST',
+                url,
+                headers=upload_headers,
+                files=files,
+                data=data,
+                timeout=60
+            )
+            
+            if response.status_code in [200, 201]:
+                file_data = response.json()
+                if 'result' in file_data:
+                    if isinstance(file_data['result'], list):
+                        file_id = file_data['result'][0]['id']
+                    else:
+                        file_id = file_data['result']['id']
+                    logger.info(f"✅ Array syntax upload successful. File ID: {file_id}")
+                    return str(file_id)
+            else:
+                logger.error(f"❌ Array syntax upload failed: {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error in array syntax upload: {e}")
+            
+        return None
+    
+    def _upload_base64_fallback(self, image_data: bytes, filename: str) -> Optional[str]:
+        """Fallback upload method using base64 encoded data."""
+        try:
+            logger.info("🔄 Trying base64 upload method...")
+            
+            url = f'{self.printful_api_url}/files'
+            
+            # Convert image to base64
+            image_b64 = base64.b64encode(image_data).decode('utf-8')
+            
+            # Printful expects file data in a specific format
+            file_data = {
+                'store_id': int(self.store_id),
+                'type': 'default',
+                'files': [
+                    {
+                        'type': 'default',
+                        'url': f'data:image/png;base64,{image_b64}',
+                        'options': [
+                            {
+                                'id': 'fit',
+                                'value': 'cover'
+                            }
+                        ],
+                        'filename': filename
+                    }
+                ]
+            }
+            
+            # Make the upload request with JSON data
+            response = self.make_request(
+                'POST',
+                url,
+                headers=self.printful_headers,
+                json=file_data,
+                timeout=60
+            )
+            
+            if response.status_code in [200, 201]:
+                result_data = response.json()
+                if 'result' in result_data:
+                    if isinstance(result_data['result'], list):
+                        file_id = result_data['result'][0]['id']
+                    else:
+                        file_id = result_data['result']['id']
+                    logger.info(f"✅ Base64 upload successful. File ID: {file_id}")
+                    return str(file_id)
+            else:
+                logger.error(f"❌ Base64 upload failed: {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error in base64 upload: {e}")
+            
+        return None
     
     def calculate_price(self, base_cost: float) -> Dict[str, float]:
         """Calculate retail price with markup."""
@@ -613,11 +768,14 @@ class TShirtGenerator:
         logger.info("🖼️ Preparing image for Printful...")
         prepared_image = self.prepare_image_for_printful(design['image_data'])
         
+        # Log image size for debugging
+        logger.info(f"📏 Image size: {len(prepared_image)} bytes ({len(prepared_image)/1024:.1f} KB)")
+        
         # Upload to Printful with retries
         logger.info("📤 Uploading to Printful...")
         file_id = self.upload_to_printful(
             prepared_image,
-            f"{title.replace(' ', '_')}.png"
+            f"{title.replace(' ', '_').replace('/', '_')}.png"
         )
         
         if not file_id:
