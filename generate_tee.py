@@ -105,8 +105,15 @@ class TShirtGenerator:
     def _verify_printful_connection(self) -> None:
         """Verify Printful API access."""
         try:
+            # First, try to get the store with store_id if available
+            if self.printful_store_id:
+                url = f"{self.printful_base_url}/stores/{self.printful_store_id}"
+            else:
+                # Try to get all stores and use the first one
+                url = f"{self.printful_base_url}/stores"
+            
             response = requests.get(
-                f"{self.printful_base_url}/store",
+                url,
                 headers=self.printful_headers,
                 timeout=30
             )
@@ -215,6 +222,12 @@ class TShirtGenerator:
         try:
             logger.info("🛍️ Creating Printful product...")
             
+            # Ensure we have a store ID
+            if not self.printful_store_id:
+                logger.error("❌ No Printful store ID set")
+                logger.error("❌ Please set PRINTFUL_STORE_ID in GitHub Secrets")
+                return None
+            
             # Calculate retail price based on cost and markup
             base_cost = 15.00  # Approximate base cost for Bella+Canvas 3001
             retail_price = round(base_cost * self.markup_percent, 2)
@@ -248,7 +261,7 @@ class TShirtGenerator:
             logger.info(f"📋 Creating product with {len(product_data['sync_variants'])} variants")
             
             response = requests.post(
-                f"{self.printful_base_url}/store/products",
+                f"{self.printful_base_url}/stores/{self.printful_store_id}/products",
                 headers=self.printful_headers,
                 json=product_data,
                 timeout=60
