@@ -1,7 +1,16 @@
-name: Generate T-Shirt (Force Fix)
+name: Generate T-Shirt Design
 
 on:
+  # Manual trigger
   workflow_dispatch:
+  
+  # Automatic triggers
+  push:
+    branches: [ main ]
+  
+  # Daily at 10 AM UTC
+  schedule:
+    - cron: '0 10 * * *'
 
 jobs:
   generate:
@@ -16,26 +25,16 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Force install correct versions
+    - name: Install dependencies
       run: |
-        # Clear any cache
-        python -m pip cache purge
-        
         # Upgrade pip
         python -m pip install --upgrade pip
         
-        # Force uninstall any existing openai
-        pip uninstall -y openai httpx httpcore
+        # Force install correct versions (bypasses cache)
+        pip install --force-reinstall --no-cache-dir openai==1.12.0 requests==2.31.0 Pillow==10.0.0
         
-        # Install specific versions
-        pip install --no-cache-dir openai==1.12.0
-        pip install --no-cache-dir requests==2.31.0
-        pip install --no-cache-dir Pillow==10.0.0
-        
-        # Verify versions
-        echo "Installed versions:"
-        pip show openai | grep Version
-        pip show requests | grep Version
+        # Verify OpenAI version
+        python -c "import openai; print(f'OpenAI version installed: {openai.__version__}')"
     
     - name: Run T-Shirt Generator
       env:
@@ -46,7 +45,8 @@ jobs:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
       run: |
-        echo "🚀 Starting T-shirt generation (forced clean install)..."
+        echo "🚀 Starting T-shirt generation..."
+        echo "📍 Using Store ID: $PRINTFUL_STORE_ID"
         python generate_tee.py
     
     - name: Upload results
