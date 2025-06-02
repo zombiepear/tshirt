@@ -1,74 +1,62 @@
 {
   "birthday-party": {
-    "shopify_id": null,
-    "title": "Birthday Celebrations",
-    "handle": "birthday-celebrations",
-    "theme": "Birthday party t-shirt design, cake, balloons, party hats, funny age jokes, birthday wishes"
+    "name": "Birthday Celebrations",
+    "title": "Birthday Party Vibes",
+    "theme": "Birthday party t-shirt design, cake, balloons, party hats, funny age jokes, birthday wishes",
+    "tags": ["birthday", "party", "celebration", "fun"]
   },
   "christmas-festive": {
-    "shopify_id": null,
-    "title": "Christmas & Holiday",
-    "handle": "christmas-holiday",
-    "theme": "Christmas holiday t-shirt design, Santa, reindeer, snow, festive vibes, holiday cheer"
+    "name": "Christmas & Holiday",
+    "title": "Holiday Cheer",
+    "theme": "Christmas holiday t-shirt design, Santa, reindeer, snow, festive vibes, holiday cheer",
+    "tags": ["christmas", "holiday", "festive", "winter"]
   },
-  "wedding-love": {
-    "shopify_id": null,
-    "title": "Weddings & Love",
-    "handle": "weddings-love",
-    "theme": "Wedding celebration t-shirt design, bride, groom, love hearts, romance, marriage humor"
+  "gaming": {
+    "name": "Gaming Life",
+    "title": "Game On",
+    "theme": "Gaming t-shirt design, controllers, retro games, achievement unlocked, gamer life",
+    "tags": ["gaming", "gamer", "hobby", "tech"]
   },
-  "stag-party": {
-    "shopify_id": null,
-    "title": "Stag Party",
-    "handle": "stag-party",
-    "theme": "Stag do t-shirt design, bachelor party, lads night out, drinking games, last night of freedom"
+  "fitness": {
+    "name": "Fitness & Gym",
+    "title": "Beast Mode",
+    "theme": "Fitness motivation t-shirt design, gym life, workout humor, gains, beast mode activated",
+    "tags": ["fitness", "gym", "workout", "health"]
   },
-  "hen-party": {
-    "shopify_id": null,
-    "title": "Hen Party",
-    "handle": "hen-party",
-    "theme": "Hen do t-shirt design, bachelorette party, girls night out, bride tribe, fun celebrations"
+  "coffee": {
+    "name": "Coffee Addicts",
+    "title": "But First Coffee",
+    "theme": "Coffee lover t-shirt design, espresso, latte art, caffeine addiction, morning fuel",
+    "tags": ["coffee", "caffeine", "lifestyle", "morning"]
   },
-  "christening-baby": {
-    "shopify_id": null,
-    "title": "Christenings & Babies",
-    "handle": "christenings-babies",
-    "theme": "Christening ceremony t-shirt design, baby celebration, baptism, new life, family gathering"
+  "foodie": {
+    "name": "Foodie Life",
+    "title": "Food is Life",
+    "theme": "Foodie t-shirt design, pizza, tacos, burgers, food puns, always hungry",
+    "tags": ["food", "foodie", "lifestyle", "humor"]
   },
-  "anniversary-milestone": {
-    "shopify_id": null,
-    "title": "Anniversaries",
-    "handle": "anniversaries",
-    "theme": "Anniversary celebration t-shirt design, milestone years, love endures, relationship goals"
+  "dad-jokes": {
+    "name": "Dad Jokes",
+    "title": "Dad Joke Champion",
+    "theme": "Dad joke t-shirt design, puns, groaner humor, dad life, terrible jokes that are actually funny",
+    "tags": ["humor", "dad", "jokes", "funny"]
   },
-  "graduation-achievement": {
-    "shopify_id": null,
-    "title": "Graduation & Success",
-    "handle": "graduation-success",
-    "theme": "Graduation achievement t-shirt design, cap and gown, diploma, academic success, future goals"
+  "sarcastic": {
+    "name": "Sarcastic Humor",
+    "title": "Sarcasm Loading",
+    "theme": "Sarcastic humor t-shirt design, witty comebacks, eye rolls, sassy attitude, clever wordplay",
+    "tags": ["sarcasm", "humor", "witty", "funny"]
   },
-  "retirement-freedom": {
-    "shopify_id": null,
-    "title": "Retirement Party",
-    "handle": "retirement-party",
-    "theme": "Retirement celebration t-shirt design, freedom at last, no more Mondays, pension life"
+  "music": {
+    "name": "Music Lovers",
+    "title": "Drop the Beat",
+    "theme": "Music lover t-shirt design, headphones, vinyl records, concert vibes, musical instruments",
+    "tags": ["music", "concert", "hobby", "entertainment"]
   },
-  "new-year-fresh": {
-    "shopify_id": null,
-    "title": "New Year Fresh Start",
-    "handle": "new-year-fresh",
-    "theme": "New Year resolution t-shirt design, fresh start, midnight countdown, champagne celebration"
-  },
-  "brit-pride": {
-    "shopify_id": null,
-    "title": "Proper British",
-    "handle": "proper-british",
-    "theme": "British pride t-shirt design, Union Jack elements, tea culture, queue jokes, weather humor"
-  },
-  "pub-culture": {
-    "shopify_id": null,
-    "title": "Pub Life",
-    "handle": "pub-life",
-    "theme": "British pub culture t-shirt design, beer, Sunday roast, fancy a pint, local pub vibes"
+  "positive-vibes": {
+    "name": "Positive Vibes",
+    "title": "Good Vibes Only",
+    "theme": "Positive vibes t-shirt design, happiness, sunshine, optimism, spreading joy",
+    "tags": ["positive", "happy", "vibes", "motivation"]
   }
 }
