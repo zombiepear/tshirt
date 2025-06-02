@@ -1,0 +1,74 @@
+name: Test Setup
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'test_env.py'
+      - '.github/workflows/test-setup.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Test Environment Variables
+      env:  # Pass secrets to test script
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+        SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
+      run: |
+        echo "🧪 Running environment test..."
+        python test_env.py
+        
+    - name: Test API Connections
+      if: success()
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+      run: |
+        echo "🔌 Testing API connections..."
+        pip install requests openai
+        
+        python -c "
+        import os
+        import requests
+        from openai import OpenAI
+        
+        # Test OpenAI
+        try:
+            client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+            response = client.chat.completions.create(
+                model='gpt-3.5-turbo',
+                messages=[{'role': 'user', 'content': 'Say OK'}],
+                max_tokens=5
+            )
+            print('✅ OpenAI API: Connected')
+        except Exception as e:
+            print(f'❌ OpenAI API: {e}')
+        
+        # Test Printful
+        try:
+            headers = {'Authorization': f\"Bearer {os.environ['PRINTFUL_API_KEY']}\"}
+            response = requests.get('https://api.printful.com/store', headers=headers)
+            if response.status_code == 200:
+                print('✅ Printful API: Connected')
+                store = response.json().get('result', {})
+                print(f'   Store: {store.get(\"name\", \"Unknown\")}')
+                print(f'   Type: {store.get(\"type\", \"Unknown\")}')
+            else:
+                print(f'❌ Printful API: Status {response.status_code}')
+        except Exception as e:
+            print(f'❌ Printful API: {e}')
+        "
