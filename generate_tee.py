@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """
-T-Shirt Generator for Printful and Shopify
-Designed for GitHub Actions - uses environment variables from secrets
+AI T-Shirt Generator for Printful + Shopify
+Generates unique designs daily using DALL-E 3
 """
 
+# FIX: Patch httpx before importing OpenAI
+import httpx
+_orig = httpx.Client.__init__
+httpx.Client.__init__ = lambda s,**k: _orig(s,**{x:y for x,y in k.items() if x!='proxies'})
+
 import os
-import json
+import sys
 import random
-import logging
 import requests
+import json
 import base64
+import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional, Dict, List
+from io import BytesIO
+from PIL import Image
 from openai import OpenAI
 
 # Configure logging
