@@ -1,0 +1,56 @@
+name: Find Printful Store ID
+
+on:
+  workflow_dispatch:
+
+jobs:
+  find-store:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install requests
+      run: pip install requests
+    
+    - name: Find Store ID
+      env:
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+      run: |
+        python - << 'EOF'
+        import os
+        import requests
+        
+        api_key = os.environ.get('PRINTFUL_API_KEY')
+        headers = {"Authorization": f"Bearer {api_key}"}
+        
+        print("🔍 Finding Your Printful Store ID\\n")
+        
+        response = requests.get("https://api.printful.com/stores", headers=headers)
+        
+        if response.status_code == 200:
+            stores = response.json().get('result', [])
+            
+            if not stores:
+                print("❌ No stores found")
+            else:
+                print(f"✅ Found {len(stores)} store(s):\\n")
+                
+                for store in stores:
+                    print(f"Store: {store.get('name')}")
+                    print(f"  ID: {store.get('id')}")
+                    print(f"  Type: {store.get('type')}")
+                    
+                    store_type = store.get('type', '').lower()
+                    if 'manual' in store_type or 'api' in store_type:
+                        print(f"  ✅ This store supports API products!")
+                        print(f"\\n👉 ADD TO GITHUB SECRETS:")
+                        print(f"   PRINTFUL_STORE_ID = {store.get('id')}")
+                    print("-" * 40)
+        else:
+            print(f"❌ Error: {response.text}")
+        EOF
