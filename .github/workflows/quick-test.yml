@@ -1,0 +1,50 @@
+name: Quick Test - Single Design
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-generation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install minimal dependencies
+      run: pip install openai requests
+    
+    - name: Generate one design
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+        SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
+      run: |
+        echo "🎨 Generating a single test design..."
+        python generate_tee.py
+    
+    - name: Show results
+      if: always()
+      run: |
+        echo "📊 Generation complete!"
+        if [ -f tshirt_generator.log ]; then
+          echo "📝 Last 20 lines of log:"
+          tail -20 tshirt_generator.log
+        fi
+        echo "🖼️ Generated images:"
+        ls -la *.png 2>/dev/null || echo "No images found"
+    
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quick-test-${{ github.run_number }}
+        path: |
+          tshirt_generator.log
+          *.png
