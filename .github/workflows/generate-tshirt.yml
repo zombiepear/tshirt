@@ -1,14 +1,9 @@
-name: Generate T-Shirt Design
+name: Generate T-Shirt Design (Fixed)
 
 on:
-  # Manual trigger
   workflow_dispatch:
-  
-  # Automatic triggers
   push:
     branches: [ main ]
-  
-  # Daily at 10 AM UTC
   schedule:
     - cron: '0 10 * * *'
 
@@ -23,18 +18,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.11'  # Use 3.11 for better compatibility
     
-    - name: Install dependencies
+    - name: Install specific versions
       run: |
-        # Upgrade pip
         python -m pip install --upgrade pip
-        
-        # Force install correct versions (bypasses cache)
-        pip install --force-reinstall --no-cache-dir openai==1.12.0 requests==2.31.0 Pillow==10.0.0
-        
-        # Verify OpenAI version
-        python -c "import openai; print(f'OpenAI version installed: {openai.__version__}')"
+        # Install specific working versions
+        pip install openai==1.12.0 requests==2.31.0 Pillow==10.0.0
     
     - name: Run T-Shirt Generator
       env:
@@ -45,8 +35,7 @@ jobs:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
       run: |
-        echo "🚀 Starting T-shirt generation..."
-        echo "📍 Using Store ID: $PRINTFUL_STORE_ID"
+        echo "🚀 Starting T-shirt generation (with fixed dependencies)..."
         python generate_tee.py
     
     - name: Upload results
