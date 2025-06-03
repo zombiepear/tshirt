@@ -256,3 +256,54 @@
 2025-06-03 02:33:33,412 - INFO - ✅ Daily generation complete!
 2025-06-03 02:33:33,412 - INFO - 💡 Note: If using GitHub Pages, wait for deployment before Printful can access files
 2025-06-03 02:33:33,412 - INFO - ==================================================
+2025-06-03 02:48:47,526 - INFO - 📍 Running in: GitHub Actions
+2025-06-03 02:48:47,526 - INFO - 🐍 Python version: 3.11.12 (main, Apr  8 2025, 21:35:04) [GCC 13.3.0]
+2025-06-03 02:48:47,526 - INFO - OpenAI library version: 1.12.0
+2025-06-03 02:48:47,575 - INFO - ✅ OpenAI client initialized successfully
+2025-06-03 02:48:47,575 - INFO - ✅ Loaded 5 collections
+2025-06-03 02:48:47,575 - INFO - 🏪 Store ID: 16092638
+2025-06-03 02:48:47,575 - INFO - 📦 GitHub Repo: zombiepear/tshirt
+2025-06-03 02:48:47,575 - INFO - 
+==================================================
+2025-06-03 02:48:47,575 - INFO - 🚀 Starting Daily T-Shirt Generation
+2025-06-03 02:48:47,575 - INFO - 📅 Date: 2025-06-03 02:48:47
+2025-06-03 02:48:47,575 - INFO - ==================================================
+2025-06-03 02:48:47,575 - INFO - 🔧 Store ID: 16092638
+2025-06-03 02:48:47,575 - INFO - 💰 Markup: 10.0%
+2025-06-03 02:48:47,872 - INFO - ✅ Printful API connection verified
+2025-06-03 02:48:47,872 - INFO - 📋 Store: TShirt.UK
+2025-06-03 02:48:47,872 - INFO - 📋 Type: shopify
+2025-06-03 02:48:47,872 - INFO - 💡 Shopify store detected - products sync through Shopify
+2025-06-03 02:48:47,872 - INFO - 📊 Today's collection (day 3): nature-inspired
+2025-06-03 02:48:47,873 - INFO - 
+🎯 Processing category: nature-inspired
+2025-06-03 02:48:47,873 - INFO - 📋 Collection: Nature Vibes
+2025-06-03 02:48:49,021 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-03 02:48:49,023 - INFO - 🎯 Theme: Ocean waves in traditional Japanese art style with foam details with bright summer vibes
+2025-06-03 02:48:49,023 - INFO - 📝 Title: Wave Splash Summer
+2025-06-03 02:48:49,023 - INFO - 🎨 Generating design with DALL-E 3...
+2025-06-03 02:48:49,023 - INFO - Theme: Ocean waves in traditional Japanese art style with foam details with bright summer vibes
+2025-06-03 02:49:02,040 - INFO - HTTP Request: POST https://api.openai.com/v1/images/generations "HTTP/1.1 200 OK"
+2025-06-03 02:49:02,335 - INFO - ✅ Design generated successfully
+2025-06-03 02:49:02,335 - INFO - 🖼️ Preparing image for Printful...
+2025-06-03 02:49:03,443 - INFO - 💾 Saved design as designs/nature-inspired_20250603_024903.png
+2025-06-03 02:49:03,443 - INFO - 🌐 GitHub URL: https://raw.githubusercontent.com/zombiepear/tshirt/main/designs/nature-inspired_20250603_024903.png
+2025-06-03 02:49:03,444 - INFO - 📝 Running in GitHub Actions - file will be pushed by workflow
+2025-06-03 02:49:03,444 - INFO - 💡 Using raw.githubusercontent.com for immediate access
+2025-06-03 02:49:03,444 - INFO - 📤 Uploading to Printful File Library...
+2025-06-03 02:49:03,444 - INFO - 📎 URL: https://raw.githubusercontent.com/zombiepear/tshirt/main/designs/nature-inspired_20250603_024903.png
+2025-06-03 02:49:03,691 - INFO - ✅ File uploaded successfully. ID: 835858283
+2025-06-03 02:49:03,691 - INFO - 📎 Printful URL: https://raw.githubusercontent.com/zombiepear/tshirt/main/designs/nature-inspired_20250603_024903.png
+2025-06-03 02:49:03,691 - INFO - 🛍️ Creating Printful product...
+2025-06-03 02:49:03,691 - INFO - 📝 Creating product...
+2025-06-03 02:49:03,871 - ERROR - ❌ Product creation failed: 400
+2025-06-03 02:49:03,871 - ERROR - Response: {"code":400,"result":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs.","error":{"reason":"BadRequest","message":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs."}}
+2025-06-03 02:49:03,871 - INFO - 💡 This is expected for Shopify stores - products sync through Shopify
+2025-06-03 02:49:03,871 - INFO - ✅ Successfully processed nature-inspired
+2025-06-03 02:49:03,871 - INFO - 🎨 Title: Wave Splash Summer
+2025-06-03 02:49:03,871 - INFO - 🆔 Product ID: shopify-sync-pending
+2025-06-03 02:49:03,871 - INFO - 
+==================================================
+2025-06-03 02:49:03,871 - INFO - ✅ Daily generation complete!
+2025-06-03 02:49:03,871 - INFO - 💡 Note: Using raw GitHub URLs for immediate access
+2025-06-03 02:49:03,871 - INFO - ==================================================
