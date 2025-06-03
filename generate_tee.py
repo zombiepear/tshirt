@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-T-Shirt Generator with GitHub Hosting
-No AWS required - uses GitHub for free image hosting
+T-Shirt Generator with GitHub Hosting (Using Raw URLs)
+Fixed prompt to generate ONLY the design, not t-shirt mockups
 """
 
 # FIX: Patch httpx before importing OpenAI
@@ -46,7 +46,6 @@ class TShirtGenerator:
         
         # GitHub configuration
         self.github_repo = os.environ.get('GITHUB_REPOSITORY', '')  # e.g., "username/repo"
-        self.github_pages_url = os.environ.get('GITHUB_PAGES_URL', '')  # e.g., "https://username.github.io/repo"
         
         # Validate required environment variables
         if not all([self.openai_api_key, self.printful_api_key, self.store_id]):
@@ -78,55 +77,55 @@ class TShirtGenerator:
             'birthday-party': {
                 'name': 'Birthday Celebrations',
                 'themes': [
-                    "Colorful birthday cake with candles and confetti",
-                    "Party animals celebrating with balloons",
-                    "Vintage birthday poster design",
-                    "Neon birthday party vibes",
-                    "Minimalist birthday celebration icons"
+                    "Colorful birthday cake with candles and confetti celebration",
+                    "Party animals (cute cartoon animals) celebrating with balloons and party hats",
+                    "Vintage retro birthday poster with ornate typography",
+                    "Neon lights spelling out birthday wishes in 80s style",
+                    "Minimalist birthday icons: cake, balloon, gift, confetti"
                 ],
                 'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
             },
             'retro-gaming': {
                 'name': 'Retro Gaming',
                 'themes': [
-                    "8-bit pixel art game controller",
-                    "Arcade cabinet with neon lights",
-                    "Retro console collection pattern",
-                    "Game over screen in vintage style",
-                    "Pixelated space invaders battle"
+                    "8-bit pixel art game controller floating in space with stars",
+                    "Classic arcade cabinet with glowing screen and neon lights",
+                    "Collection of retro gaming consoles arranged in a pattern",
+                    "Pixelated 'Game Over' screen with coins and hearts",
+                    "8-bit space invaders descending in formation"
                 ],
                 'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
             },
             'nature-inspired': {
                 'name': 'Nature Vibes',
                 'themes': [
-                    "Mountain landscape at sunset",
-                    "Geometric forest pattern",
-                    "Ocean waves in Japanese art style",
-                    "Desert cactus garden illustration",
-                    "Northern lights aurora design"
+                    "Majestic mountain range silhouette at sunset with gradient sky",
+                    "Geometric forest pattern with triangular trees and hidden animals",
+                    "Ocean waves in traditional Japanese art style with foam details",
+                    "Desert landscape with various cacti and succulents under starry sky",
+                    "Northern lights aurora borealis swirling over pine forest"
                 ],
                 'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
             },
             'funny-slogans': {
                 'name': 'Humor & Sarcasm',
                 'themes': [
-                    "Sarcastic coffee lover quote design",
-                    "Programmer humor code snippet",
-                    "Cat with attitude illustration",
-                    "Dad joke championship winner badge",
-                    "Introvert's survival guide diagram"
+                    "Grumpy coffee cup character with steam and attitude",
+                    "Computer screen showing funny code comments and error messages",
+                    "Sassy cat with sunglasses giving side-eye",
+                    "Trophy or medal for 'World's Best Dad Jokes'",
+                    "Introvert's battery meter showing low charge in crowds"
                 ],
                 'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
             },
             'abstract-art': {
                 'name': 'Abstract & Modern',
                 'themes': [
-                    "Liquid marble color flow",
-                    "Geometric shapes in bold colors",
-                    "Minimalist line art faces",
-                    "Abstract brush strokes pattern",
-                    "Bauhaus inspired composition"
+                    "Liquid marble effect with swirling colors and gold veins",
+                    "Bold geometric shapes overlapping in vibrant colors",
+                    "Continuous line art drawing forming abstract faces",
+                    "Paint brush strokes in rainbow colors on white background",
+                    "Bauhaus-inspired composition with circles, squares, and triangles"
                 ],
                 'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
             }
@@ -165,15 +164,13 @@ class TShirtGenerator:
             return False
     
     def get_github_url(self, filename: str) -> str:
-        """Generate GitHub URL for the file."""
-        if self.github_pages_url:
-            # Use GitHub Pages URL if configured
-            return f"{self.github_pages_url}/designs/{filename}"
-        elif self.github_repo:
-            # Use raw GitHub URL
+        """Generate GitHub URL for the file - using RAW URLs for immediate access."""
+        if self.github_repo:
+            # Use raw GitHub URL - available IMMEDIATELY after push!
             return f"https://raw.githubusercontent.com/{self.github_repo}/main/designs/{filename}"
         else:
-            # Fallback - will need to be updated after push
+            # Fallback
+            logger.warning("GitHub repo not set, using placeholder URL")
             return f"https://example.com/designs/{filename}"
     
     def save_design_locally(self, image_data: bytes, title: str, collection_key: str) -> str:
@@ -211,25 +208,6 @@ class TShirtGenerator:
             logger.error(f"Error saving design locally: {e}")
             return None
     
-    def wait_for_github_upload(self, url: str, max_attempts: int = 10) -> bool:
-        """Wait for file to be available on GitHub (for GitHub Actions workflow)."""
-        logger.info(f"⏳ Waiting for GitHub upload: {url}")
-        
-        for attempt in range(max_attempts):
-            try:
-                response = requests.head(url, timeout=5)
-                if response.status_code == 200:
-                    logger.info(f"✅ File available on GitHub!")
-                    return True
-            except:
-                pass
-            
-            if attempt < max_attempts - 1:
-                time.sleep(3)
-        
-        logger.warning("⚠️  File not yet available on GitHub, proceeding anyway...")
-        return False
-    
     def upload_to_printful(self, design_url: str, filename: str) -> Optional[str]:
         """Upload design to Printful using URL-based method."""
         try:
@@ -247,8 +225,6 @@ class TShirtGenerator:
                 'visible': True,
                 'options': []
             }
-            
-            logger.debug(f"Request data: {json.dumps(file_data, indent=2)}")
             
             # Make the request
             response = self.session.post(
@@ -269,7 +245,6 @@ class TShirtGenerator:
                 logger.error(f"❌ Upload failed: {response.status_code}")
                 logger.error(f"Response: {response.text}")
                 
-                # If URL not accessible, provide guidance
                 if "file URL or data not specified" in response.text:
                     logger.error("💡 The file URL may not be accessible yet.")
                     logger.error("💡 Make sure the GitHub workflow has pushed the file.")
@@ -288,11 +263,11 @@ class TShirtGenerator:
         # Add seasonal modifications
         month = datetime.now().month
         if month == 12:
-            theme += " with subtle Christmas elements"
+            theme += " with subtle Christmas holiday elements"
         elif month in [6, 7, 8]:
-            theme += " with summer vibes"
+            theme += " with bright summer vibes"
         elif month == 10:
-            theme += " with Halloween twist"
+            theme += " with spooky Halloween elements"
         
         return theme
     
@@ -303,13 +278,16 @@ class TShirtGenerator:
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a creative t-shirt designer. Generate short, catchy product titles."},
-                    {"role": "user", "content": f"Create a catchy t-shirt title (max 5 words) for this design theme: {theme}. Collection: {collection_name}"}
+                    {"role": "user", "content": f"Create ONE catchy t-shirt title (max 4 words) for this design theme: {theme}. Collection: {collection_name}. Just give me the title, no numbering or quotes."}
                 ],
                 max_tokens=20,
                 temperature=0.8
             )
             
-            title = response.choices[0].message.content.strip().strip('"')
+            title = response.choices[0].message.content.strip().strip('"').strip("'")
+            # Clean up any numbering
+            if title.startswith(('1.', '1)', '1 ')):
+                title = title[2:].strip()
             return title
         except Exception as e:
             logger.error(f"Error generating title: {e}")
@@ -318,22 +296,26 @@ class TShirtGenerator:
     def generate_design(self, theme: str, title: str) -> Optional[Dict]:
         """Generate a T-shirt design using DALL-E 3."""
         try:
+            # FIXED PROMPT - No t-shirt mockups!
             prompt = f"""
-            Create a professional t-shirt design for: {theme}
+            Create a graphic design for printing on a t-shirt. Theme: {theme}
             
-            Requirements:
-            - Clean, eye-catching design suitable for print-on-demand
-            - Works well on both white and black t-shirts
-            - High contrast, bold elements
-            - No text unless specifically requested
-            - Modern, trendy style
+            IMPORTANT Requirements:
+            - Create ONLY the artwork/design itself, NOT a t-shirt or clothing mockup
+            - The design should fill the entire square canvas
+            - Style: Bold, eye-catching, suitable for t-shirt printing
+            - High contrast with clear, defined edges
+            - Works well on both light and dark fabric
+            - Modern, trendy, commercially appealing aesthetic
             - Centered composition
-            - No copyrighted content
+            - No copyrighted characters or logos
+            - No text unless specifically mentioned in the theme
             
-            Make it vibrant and commercially appealing!
+            Design style: Professional print-ready artwork
             """
             
             logger.info("🎨 Generating design with DALL-E 3...")
+            logger.info(f"Theme: {theme}")
             
             response = self.openai_client.images.generate(
                 model="dall-e-3",
@@ -372,23 +354,31 @@ class TShirtGenerator:
                 # Calculate aspect ratio preserving resize
                 img.thumbnail(target_size, Image.Resampling.LANCZOS)
                 
-                # Create new image with white background
-                new_img = Image.new('RGB', target_size, 'white')
+                # Create new image with transparent background
+                new_img = Image.new('RGBA', target_size, (255, 255, 255, 0))
                 
                 # Paste resized image in center
                 x = (target_size[0] - img.width) // 2
                 y = (target_size[1] - img.height) // 2
-                new_img.paste(img, (x, y))
                 
-                img = new_img
+                # Convert to RGBA if needed for transparency
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                new_img.paste(img, (x, y), img)
+                
+                # Convert back to RGB for final save
+                final_img = Image.new('RGB', target_size, (255, 255, 255))
+                final_img.paste(new_img, (0, 0), new_img)
+                img = final_img
             
-            # Convert to RGB if necessary
+            # Ensure RGB mode
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
             # Save to bytes
             output = BytesIO()
-            img.save(output, format='PNG', optimize=True)
+            img.save(output, format='PNG', optimize=True, quality=95)
             return output.getvalue()
             
         except Exception as e:
@@ -482,18 +472,16 @@ class TShirtGenerator:
             logger.error("❌ Failed to save design locally")
             return
         
-        # Get GitHub URL
+        # Get GitHub URL (using raw URL for immediate access)
         github_url = self.get_github_url(filename)
         logger.info(f"🌐 GitHub URL: {github_url}")
         
-        # Note: In GitHub Actions, the file won't be available immediately
-        # The workflow will handle pushing it to GitHub Pages
+        # Note about GitHub Actions
         if os.environ.get('GITHUB_ACTIONS'):
             logger.info("📝 Running in GitHub Actions - file will be pushed by workflow")
-            logger.info("💡 Printful upload may need to wait for GitHub Pages deployment")
+            logger.info("💡 Using raw.githubusercontent.com for immediate access")
         
-        # Try to upload to Printful
-        # This might fail if the file isn't on GitHub yet, which is OK
+        # Upload to Printful
         file_id = self.upload_to_printful(github_url, filename)
         
         if file_id:
@@ -506,8 +494,9 @@ class TShirtGenerator:
                 logger.info(f"🎨 Title: {title}")
                 logger.info(f"🆔 Product ID: {product['sync_product']['id']}")
         else:
-            logger.warning("⚠️  Printful upload failed - file may not be on GitHub yet")
-            logger.info("💡 You can manually upload after GitHub Pages deployment")
+            logger.warning("⚠️  Printful upload failed - this might be a timing issue")
+            logger.info("💡 The file will be available after GitHub pushes it")
+            logger.info(f"💡 Manual upload URL: {github_url}")
     
     def run_daily_generation(self):
         """Run the daily generation process."""
@@ -538,7 +527,7 @@ class TShirtGenerator:
         
         logger.info("\n" + "="*50)
         logger.info("✅ Daily generation complete!")
-        logger.info("💡 Note: If using GitHub Pages, wait for deployment before Printful can access files")
+        logger.info("💡 Note: Using raw GitHub URLs for immediate access")
         logger.info("="*50)
 
 def main():
