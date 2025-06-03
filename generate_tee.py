@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AI T-Shirt Generator for Printful + Shopify
-Fixed version using URL-based file upload
+T-Shirt Generator with GitHub Hosting
+No AWS required - uses GitHub for free image hosting
 """
 
 # FIX: Patch httpx before importing OpenAI
@@ -17,19 +17,15 @@ import json
 import base64
 import logging
 import time
-import boto3
 from datetime import datetime
 from typing import Optional, Dict, List
 from io import BytesIO
 from PIL import Image
 from openai import OpenAI
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # Set up logging
-log_level = logging.DEBUG if os.environ.get('DEBUG') else logging.INFO
 logging.basicConfig(
-    level=log_level,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('tshirt_generator.log'),
@@ -48,11 +44,9 @@ class TShirtGenerator:
         self.shopify_token = os.environ.get('SHOPIFY_ACCESS_TOKEN')
         self.markup_percent = float(os.environ.get('MARKUP_PERCENT', '30'))
         
-        # S3 Configuration (for hosting files)
-        self.aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-        self.aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-        self.s3_bucket = os.environ.get('S3_BUCKET_NAME', 'printful-designs')
-        self.s3_region = os.environ.get('S3_REGION', 'us-east-1')
+        # GitHub configuration
+        self.github_repo = os.environ.get('GITHUB_REPOSITORY', '')  # e.g., "username/repo"
+        self.github_pages_url = os.environ.get('GITHUB_PAGES_URL', '')  # e.g., "https://username.github.io/repo"
         
         # Validate required environment variables
         if not all([self.openai_api_key, self.printful_api_key, self.store_id]):
@@ -68,36 +62,18 @@ class TShirtGenerator:
             logger.error(f"OpenAI initialization error: {e}")
             raise
         
-        # Initialize session with retry strategy
+        # Initialize session
         self.session = requests.Session()
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504]
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
         
         # Printful API setup
         self.printful_api_url = 'https://api.printful.com'
         self.printful_headers = {
             'Authorization': f'Bearer {self.printful_api_key}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-PF-Store-Id': str(self.store_id)
         }
         
-        # S3 client setup (if AWS credentials available)
-        self.s3_client = None
-        if self.aws_access_key and self.aws_secret_key:
-            self.s3_client = boto3.client(
-                's3',
-                aws_access_key_id=self.aws_access_key,
-                aws_secret_access_key=self.aws_secret_key,
-                region_name=self.s3_region
-            )
-            logger.info("✅ AWS S3 client initialized")
-        
-        # Collection themes
+        # Collection themes with Printful variant IDs
         self.collections = {
             'birthday-party': {
                 'name': 'Birthday Celebrations',
@@ -158,6 +134,7 @@ class TShirtGenerator:
         
         logger.info(f"✅ Loaded {len(self.collections)} collections")
         logger.info(f"🏪 Store ID: {self.store_id}")
+        logger.info(f"📦 GitHub Repo: {self.github_repo}")
     
     def verify_printful_connection(self):
         """Verify Printful API connection and store type."""
@@ -175,9 +152,8 @@ class TShirtGenerator:
                 logger.info(f"📋 Store: {store_data['result']['name']}")
                 logger.info(f"📋 Type: {store_type}")
                 
-                # Warn if store type might have limitations
-                if store_type != 'manual':
-                    logger.warning(f"⚠️  Store type '{store_type}' may have API limitations")
+                if store_type == 'shopify':
+                    logger.info("💡 Shopify store detected - products sync through Shopify")
                 
                 return True
             else:
@@ -188,45 +164,77 @@ class TShirtGenerator:
             logger.error(f"❌ Error verifying Printful connection: {e}")
             return False
     
-    def upload_to_s3(self, image_data: bytes, filename: str) -> Optional[str]:
-        """Upload image to S3 and return public URL."""
-        if not self.s3_client:
-            logger.warning("S3 not configured, will use GitHub Pages fallback")
-            return None
-        
+    def get_github_url(self, filename: str) -> str:
+        """Generate GitHub URL for the file."""
+        if self.github_pages_url:
+            # Use GitHub Pages URL if configured
+            return f"{self.github_pages_url}/designs/{filename}"
+        elif self.github_repo:
+            # Use raw GitHub URL
+            return f"https://raw.githubusercontent.com/{self.github_repo}/main/designs/{filename}"
+        else:
+            # Fallback - will need to be updated after push
+            return f"https://example.com/designs/{filename}"
+    
+    def save_design_locally(self, image_data: bytes, title: str, collection_key: str) -> str:
+        """Save design locally and prepare for GitHub upload."""
         try:
-            # Upload to S3
-            key = f"designs/{datetime.now().strftime('%Y%m%d')}/{filename}"
-            self.s3_client.put_object(
-                Bucket=self.s3_bucket,
-                Key=key,
-                Body=image_data,
-                ContentType='image/png',
-                ACL='public-read'
-            )
+            # Create designs directory
+            os.makedirs("designs", exist_ok=True)
             
-            # Return public URL
-            url = f"https://{self.s3_bucket}.s3.{self.s3_region}.amazonaws.com/{key}"
-            logger.info(f"✅ Uploaded to S3: {url}")
-            return url
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{collection_key}_{timestamp}.png"
+            filepath = os.path.join("designs", filename)
             
+            # Save image
+            with open(filepath, 'wb') as f:
+                f.write(image_data)
+            
+            logger.info(f"💾 Saved design as {filepath}")
+            
+            # Save metadata
+            metadata = {
+                'title': title,
+                'collection': collection_key,
+                'timestamp': timestamp,
+                'filename': filename,
+                'github_url': self.get_github_url(filename)
+            }
+            
+            metadata_path = os.path.join("designs", f"{collection_key}_{timestamp}_metadata.json")
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            return filename
+                
         except Exception as e:
-            logger.error(f"❌ S3 upload failed: {e}")
+            logger.error(f"Error saving design locally: {e}")
             return None
     
-    def upload_to_github_pages(self, image_data: bytes, filename: str) -> str:
-        """Fallback: Create a data URL for the image."""
-        # This is a temporary solution - in production, you'd upload to GitHub Pages
-        # or another free hosting service
-        image_b64 = base64.b64encode(image_data).decode('utf-8')
-        data_url = f"data:image/png;base64,{image_b64}"
-        logger.info("📎 Using data URL (temporary solution)")
-        return data_url
+    def wait_for_github_upload(self, url: str, max_attempts: int = 10) -> bool:
+        """Wait for file to be available on GitHub (for GitHub Actions workflow)."""
+        logger.info(f"⏳ Waiting for GitHub upload: {url}")
+        
+        for attempt in range(max_attempts):
+            try:
+                response = requests.head(url, timeout=5)
+                if response.status_code == 200:
+                    logger.info(f"✅ File available on GitHub!")
+                    return True
+            except:
+                pass
+            
+            if attempt < max_attempts - 1:
+                time.sleep(3)
+        
+        logger.warning("⚠️  File not yet available on GitHub, proceeding anyway...")
+        return False
     
     def upload_to_printful(self, design_url: str, filename: str) -> Optional[str]:
         """Upload design to Printful using URL-based method."""
         try:
             logger.info("📤 Uploading to Printful File Library...")
+            logger.info(f"📎 URL: {design_url}")
             
             # Printful expects URL-based file submission
             url = f'{self.printful_api_url}/files'
@@ -240,17 +248,12 @@ class TShirtGenerator:
                 'options': []
             }
             
-            # Include store_id in headers
-            headers = self.printful_headers.copy()
-            headers['X-PF-Store-Id'] = str(self.store_id)
-            
-            logger.debug(f"Request URL: {url}")
             logger.debug(f"Request data: {json.dumps(file_data, indent=2)}")
             
             # Make the request
             response = self.session.post(
                 url,
-                headers=headers,
+                headers=self.printful_headers,
                 json=file_data,
                 timeout=60
             )
@@ -260,11 +263,17 @@ class TShirtGenerator:
                 file_id = result['result']['id']
                 file_url = result['result'].get('url', design_url)
                 logger.info(f"✅ File uploaded successfully. ID: {file_id}")
-                logger.info(f"📎 File URL: {file_url}")
+                logger.info(f"📎 Printful URL: {file_url}")
                 return str(file_id)
             else:
                 logger.error(f"❌ Upload failed: {response.status_code}")
                 logger.error(f"Response: {response.text}")
+                
+                # If URL not accessible, provide guidance
+                if "file URL or data not specified" in response.text:
+                    logger.error("💡 The file URL may not be accessible yet.")
+                    logger.error("💡 Make sure the GitHub workflow has pushed the file.")
+                
                 return None
                 
         except Exception as e:
@@ -391,25 +400,21 @@ class TShirtGenerator:
         try:
             url = f'{self.printful_api_url}/store/products'
             
-            # Base cost for Unisex Staple T-Shirt
+            # Calculate pricing
             base_cost = 12.95
             markup = base_cost * (self.markup_percent / 100)
             retail_price = int(base_cost + markup) + 0.99
             
-            # Create variants
-            variants = []
-            for variant_id in collection['variant_ids']:
-                variants.append({
-                    'variant_id': variant_id,
-                    'retail_price': f"{retail_price:.2f}",
-                    'is_enabled': True,
-                    'files': [  # Must be an array
-                        {
-                            'id': printful_file_id,
-                            'placement': 'front'
-                        }
-                    ]
-                })
+            # Create variants (simplified - just one size/color for now)
+            variants = [{
+                'variant_id': 4011,  # Unisex Staple T-Shirt - S - Black
+                'retail_price': f"{retail_price:.2f}",
+                'is_enabled': True,
+                'files': [{
+                    'id': printful_file_id,
+                    'placement': 'front'
+                }]
+            }]
             
             product_data = {
                 'sync_product': {
@@ -420,15 +425,11 @@ class TShirtGenerator:
                 'sync_variants': variants
             }
             
-            # Include store_id in headers
-            headers = self.printful_headers.copy()
-            headers['X-PF-Store-Id'] = str(self.store_id)
-            
-            logger.info(f"📝 Creating product with {len(variants)} variants...")
+            logger.info(f"📝 Creating product...")
             
             response = self.session.post(
                 url,
-                headers=headers,
+                headers=self.printful_headers,
                 json=product_data,
                 timeout=30
             )
@@ -441,43 +442,15 @@ class TShirtGenerator:
                 logger.error(f"❌ Product creation failed: {response.status_code}")
                 logger.error(f"Response: {response.text}")
                 
-                # Check if it's a store type issue
                 if "Manual Order / API platform" in response.text:
-                    logger.error("⚠️  This endpoint only works with Manual/API stores, not Shopify stores")
-                    logger.info("💡 Products will be created when synced through Shopify")
-                    # Return a mock success for Shopify stores
-                    return {'sync_product': {'id': 'shopify-pending'}}
+                    logger.info("💡 This is expected for Shopify stores - products sync through Shopify")
+                    return {'sync_product': {'id': 'shopify-sync-pending'}}
                 
                 return None
                 
         except Exception as e:
             logger.error(f"❌ Error creating product: {e}")
             return None
-    
-    def save_design_locally(self, image_data: bytes, title: str, collection_key: str):
-        """Save design locally for backup."""
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{collection_key}_{timestamp}.png"
-            
-            with open(filename, 'wb') as f:
-                f.write(image_data)
-            
-            logger.info(f"💾 Saved design as {filename}")
-            
-            # Save metadata
-            metadata = {
-                'title': title,
-                'collection': collection_key,
-                'timestamp': timestamp,
-                'filename': filename
-            }
-            
-            with open(f"{collection_key}_{timestamp}_metadata.json", 'w') as f:
-                json.dump(metadata, f, indent=2)
-                
-        except Exception as e:
-            logger.error(f"Error saving design locally: {e}")
     
     def process_collection(self, collection_key: str):
         """Process a single collection."""
@@ -499,43 +472,42 @@ class TShirtGenerator:
             logger.error(f"❌ Failed to generate design for {collection_key}")
             return
         
-        # Save locally first
-        self.save_design_locally(design['image_data'], title, collection_key)
-        
         # Prepare image for Printful
         logger.info("🖼️ Preparing image for Printful...")
         prepared_image = self.prepare_image_for_printful(design['image_data'])
         
-        # Upload to hosting service (S3 or fallback)
-        logger.info("☁️ Uploading to hosting service...")
-        design_url = self.upload_to_s3(prepared_image, f"{title.replace(' ', '_')}.png")
-        
-        if not design_url:
-            # Fallback to GitHub Pages or data URL
-            design_url = self.upload_to_github_pages(prepared_image, f"{title.replace(' ', '_')}.png")
-        
-        # Upload to Printful File Library
-        file_id = self.upload_to_printful(design_url, f"{title.replace(' ', '_')}.png")
-        
-        if not file_id:
-            logger.error(f"❌ Failed to upload design to Printful for {collection_key}")
+        # Save locally (will be pushed to GitHub by the workflow)
+        filename = self.save_design_locally(prepared_image, title, collection_key)
+        if not filename:
+            logger.error("❌ Failed to save design locally")
             return
         
-        # Add delay to avoid rate limiting
-        time.sleep(2)
+        # Get GitHub URL
+        github_url = self.get_github_url(filename)
+        logger.info(f"🌐 GitHub URL: {github_url}")
         
-        # Create product
-        logger.info("🛍️ Creating Printful product...")
-        product = self.create_printful_product(title, file_id, collection)
+        # Note: In GitHub Actions, the file won't be available immediately
+        # The workflow will handle pushing it to GitHub Pages
+        if os.environ.get('GITHUB_ACTIONS'):
+            logger.info("📝 Running in GitHub Actions - file will be pushed by workflow")
+            logger.info("💡 Printful upload may need to wait for GitHub Pages deployment")
         
-        if not product:
-            logger.error(f"❌ Failed to create product for {collection_key}")
-            return
+        # Try to upload to Printful
+        # This might fail if the file isn't on GitHub yet, which is OK
+        file_id = self.upload_to_printful(github_url, filename)
         
-        logger.info(f"✅ Successfully processed {collection_key}")
-        logger.info(f"🎨 Title: {title}")
-        if product and 'sync_product' in product:
-            logger.info(f"🆔 Product ID: {product['sync_product']['id']}")
+        if file_id:
+            # Create product
+            logger.info("🛍️ Creating Printful product...")
+            product = self.create_printful_product(title, file_id, collection)
+            
+            if product:
+                logger.info(f"✅ Successfully processed {collection_key}")
+                logger.info(f"🎨 Title: {title}")
+                logger.info(f"🆔 Product ID: {product['sync_product']['id']}")
+        else:
+            logger.warning("⚠️  Printful upload failed - file may not be on GitHub yet")
+            logger.info("💡 You can manually upload after GitHub Pages deployment")
     
     def run_daily_generation(self):
         """Run the daily generation process."""
@@ -544,7 +516,7 @@ class TShirtGenerator:
         logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("="*50)
         
-        # Log environment info
+        # Log configuration
         logger.info(f"🔧 Store ID: {self.store_id}")
         logger.info(f"💰 Markup: {self.markup_percent}%")
         
@@ -566,19 +538,17 @@ class TShirtGenerator:
         
         logger.info("\n" + "="*50)
         logger.info("✅ Daily generation complete!")
+        logger.info("💡 Note: If using GitHub Pages, wait for deployment before Printful can access files")
         logger.info("="*50)
 
 def main():
     """Main entry point."""
     try:
-        # Log where we're running
         if os.environ.get('GITHUB_ACTIONS'):
             logger.info("📍 Running in: GitHub Actions")
-            logger.info(f"🔧 Runner: {os.environ.get('RUNNER_NAME', 'Unknown')}")
         else:
             logger.info("📍 Running in: Local environment")
         
-        # Log Python version
         logger.info(f"🐍 Python version: {sys.version}")
         
         generator = TShirtGenerator()
