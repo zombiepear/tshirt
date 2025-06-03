@@ -100,3 +100,55 @@
 2025-06-03 02:27:15,343 - INFO - ✅ Daily generation complete!
 2025-06-03 02:27:15,343 - INFO - 💡 Note: If using GitHub Pages, wait for deployment before Printful can access files
 2025-06-03 02:27:15,343 - INFO - ==================================================
+2025-06-03 02:28:16,772 - INFO - 📍 Running in: GitHub Actions
+2025-06-03 02:28:16,772 - INFO - 🐍 Python version: 3.11.12 (main, Apr  8 2025, 21:35:04) [GCC 13.3.0]
+2025-06-03 02:28:16,772 - INFO - OpenAI library version: 1.12.0
+2025-06-03 02:28:16,820 - INFO - ✅ OpenAI client initialized successfully
+2025-06-03 02:28:16,821 - INFO - ✅ Loaded 5 collections
+2025-06-03 02:28:16,821 - INFO - 🏪 Store ID: 16092638
+2025-06-03 02:28:16,821 - INFO - 📦 GitHub Repo: zombiepear/tshirt
+2025-06-03 02:28:16,821 - INFO - 
+==================================================
+2025-06-03 02:28:16,821 - INFO - 🚀 Starting Daily T-Shirt Generation
+2025-06-03 02:28:16,821 - INFO - 📅 Date: 2025-06-03 02:28:16
+2025-06-03 02:28:16,821 - INFO - ==================================================
+2025-06-03 02:28:16,821 - INFO - 🔧 Store ID: 16092638
+2025-06-03 02:28:16,821 - INFO - 💰 Markup: 10.0%
+2025-06-03 02:28:17,205 - INFO - ✅ Printful API connection verified
+2025-06-03 02:28:17,205 - INFO - 📋 Store: TShirt.UK
+2025-06-03 02:28:17,205 - INFO - 📋 Type: shopify
+2025-06-03 02:28:17,205 - INFO - 💡 Shopify store detected - products sync through Shopify
+2025-06-03 02:28:17,205 - INFO - 📊 Today's collection (day 3): nature-inspired
+2025-06-03 02:28:17,205 - INFO - 
+🎯 Processing category: nature-inspired
+2025-06-03 02:28:17,205 - INFO - 📋 Collection: Nature Vibes
+2025-06-03 02:28:17,665 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-03 02:28:17,666 - INFO - 🎯 Theme: Ocean waves in Japanese art style with summer vibes
+2025-06-03 02:28:17,666 - INFO - 📝 Title: 1. "Wave Zen: Summer Serenity Tee"
+2. "Japanese Wave Bliss T-shirt
+2025-06-03 02:28:17,666 - INFO - 🎨 Generating design with DALL-E 3...
+2025-06-03 02:28:31,243 - INFO - HTTP Request: POST https://api.openai.com/v1/images/generations "HTTP/1.1 200 OK"
+2025-06-03 02:28:31,688 - INFO - ✅ Design generated successfully
+2025-06-03 02:28:31,688 - INFO - 🖼️ Preparing image for Printful...
+2025-06-03 02:28:32,925 - INFO - 💾 Saved design as designs/nature-inspired_20250603_022832.png
+2025-06-03 02:28:32,926 - INFO - 🌐 GitHub URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_022832.png
+2025-06-03 02:28:32,926 - INFO - 📝 Running in GitHub Actions - file will be pushed by workflow
+2025-06-03 02:28:32,926 - INFO - 💡 Printful upload may need to wait for GitHub Pages deployment
+2025-06-03 02:28:32,926 - INFO - 📤 Uploading to Printful File Library...
+2025-06-03 02:28:32,926 - INFO - 📎 URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_022832.png
+2025-06-03 02:28:33,241 - INFO - ✅ File uploaded successfully. ID: 835851885
+2025-06-03 02:28:33,241 - INFO - 📎 Printful URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_022832.png
+2025-06-03 02:28:33,241 - INFO - 🛍️ Creating Printful product...
+2025-06-03 02:28:33,241 - INFO - 📝 Creating product...
+2025-06-03 02:28:33,444 - ERROR - ❌ Product creation failed: 400
+2025-06-03 02:28:33,444 - ERROR - Response: {"code":400,"result":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs.","error":{"reason":"BadRequest","message":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs."}}
+2025-06-03 02:28:33,444 - INFO - 💡 This is expected for Shopify stores - products sync through Shopify
+2025-06-03 02:28:33,444 - INFO - ✅ Successfully processed nature-inspired
+2025-06-03 02:28:33,445 - INFO - 🎨 Title: 1. "Wave Zen: Summer Serenity Tee"
+2. "Japanese Wave Bliss T-shirt
+2025-06-03 02:28:33,445 - INFO - 🆔 Product ID: shopify-sync-pending
+2025-06-03 02:28:33,445 - INFO - 
+==================================================
+2025-06-03 02:28:33,445 - INFO - ✅ Daily generation complete!
+2025-06-03 02:28:33,445 - INFO - 💡 Note: If using GitHub Pages, wait for deployment before Printful can access files
+2025-06-03 02:28:33,445 - INFO - ==================================================
