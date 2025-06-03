@@ -1,0 +1,95 @@
+name: Upload Designs to Stores
+
+on:
+  workflow_dispatch:
+    inputs:
+      directory:
+        description: 'Directory to process'
+        required: false
+        default: '.'
+      dry_run:
+        description: 'Dry run (test without uploading)'
+        required: false
+        default: false
+        type: boolean
+      retry_failed:
+        description: 'Retry previously failed uploads'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+  PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+  MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT || '1.4' }}
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        # Fix SSL issues
+        pip install --upgrade certifi
+        pip install --upgrade requests[security]
+    
+    - name: Download recent designs (optional)
+      continue-on-error: true
+      run: |
+        # Download artifacts from recent runs if needed
+        echo "Checking for recent design artifacts..."
+        # This step can be expanded to download from other workflow runs
+    
+    - name: Run upload manager
+      env:
+        REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+        SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      run: |
+        # Build command
+        CMD="python upload_manager.py --dir ${{ inputs.directory }}"
+        
+        if [ "${{ inputs.dry_run }}" = "true" ]; then
+          CMD="$CMD --dry-run"
+        fi
+        
+        if [ "${{ inputs.retry_failed }}" = "true" ]; then
+          CMD="$CMD --retry-failed"
+        fi
+        
+        # Execute
+        eval $CMD
+    
+    - name: Upload tracker
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: upload-tracker-${{ github.run_number }}
+        path: |
+          upload_tracker.json
+        retention-days: 90
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## Upload Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f upload_tracker.json ]; then
+          echo "### Statistics" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          jq '.stats' upload_tracker.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi
