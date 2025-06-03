@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>T-Shirt Designs</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .design { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        img { max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>T-Shirt Design Gallery</h1>
+    <div class="gallery" id="gallery"></div>
+    <script>
+        // This will be populated by GitHub Pages directory listing
+        fetch('.')
+            .then(r => r.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const links = doc.querySelectorAll('a');
+                const gallery = document.getElementById('gallery');
+                
+                links.forEach(link => {
+                    if (link.href.endsWith('.png')) {
+                        const div = document.createElement('div');
+                        div.className = 'design';
+                        div.innerHTML = `<img src="${link.href}" alt="${link.textContent}">
+                                       <p>${link.textContent}</p>`;
+                        gallery.appendChild(div);
+                    }
+                });
+            })
+            .catch(() => {
+                document.getElementById('gallery').innerHTML = '<p>No designs yet</p>';
+            });
+    </script>
+</body>
+</html>
