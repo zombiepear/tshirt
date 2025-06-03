@@ -12,10 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -37,23 +39,21 @@ jobs:
         PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
         MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
         GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
       run: |
         echo "🎨 Generating T-Shirt Design..."
-        python generate_tee.py || echo "Generator completed with status $?"
-        
-        # List generated files
-        echo "📁 Generated files:"
-        ls -la designs/ || echo "No designs directory"
-        ls -la *.png *.json || echo "No files in root"
+        echo "📍 Repository: $GITHUB_REPOSITORY"
+        echo "🌐 Pages URL: $GITHUB_PAGES_URL"
+        python generate_tee.py
     
-    - name: Commit and push designs
+    - name: Commit generated designs
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # Add any generated files
+        # Add all generated files
         git add designs/*.png designs/*.json || true
-        git add *.png *.json *.log || true
+        git add *.log || true
         
         # Commit if there are changes
         if git diff --staged --quiet; then
@@ -63,14 +63,72 @@ jobs:
           git push
         fi
     
+    - name: Create index.html for designs
+      run: |
+        cat > designs/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>T-Shirt Designs</title>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+                .design { border: 1px solid #ddd; padding: 10px; text-align: center; }
+                img { max-width: 100%; height: auto; }
+            </style>
+        </head>
+        <body>
+            <h1>T-Shirt Design Gallery</h1>
+            <div class="gallery" id="gallery"></div>
+            <script>
+                // This will be populated by GitHub Pages directory listing
+                fetch('.')
+                    .then(r => r.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const links = doc.querySelectorAll('a');
+                        const gallery = document.getElementById('gallery');
+                        
+                        links.forEach(link => {
+                            if (link.href.endsWith('.png')) {
+                                const div = document.createElement('div');
+                                div.className = 'design';
+                                div.innerHTML = `<img src="${link.href}" alt="${link.textContent}">
+                                               <p>${link.textContent}</p>`;
+                                gallery.appendChild(div);
+                            }
+                        });
+                    })
+                    .catch(() => {
+                        document.getElementById('gallery').innerHTML = '<p>No designs yet</p>';
+                    });
+            </script>
+        </body>
+        </html>
+        EOF
+        
+        git add designs/index.html || true
+        git commit -m "Update gallery" || true
+        git push || true
+    
     - name: Upload artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: generation-results-${{ github.run_number }}
+        name: designs-${{ github.run_number }}
         path: |
-          tshirt_generator.log
           designs/
-          *.png
-          *.json
+          *.log
         retention-days: 30
+    
+    - name: Summary
+      run: |
+        echo "## 🎨 T-Shirt Generation Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**GitHub Pages URL:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+        echo "**Designs Gallery:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/designs/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Generated Files:" >> $GITHUB_STEP_SUMMARY
+        ls -la designs/*.png 2>/dev/null | tail -5 >> $GITHUB_STEP_SUMMARY || echo "No designs found" >> $GITHUB_STEP_SUMMARY
