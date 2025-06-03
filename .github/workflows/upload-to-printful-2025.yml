@@ -1,0 +1,228 @@
+name: Upload to Printful (2025 API)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Upload mode'
+        required: true
+        default: 'shopify-only'
+        type: choice
+        options:
+          - 'shopify-only'      # Skip Printful due to Cloudflare
+          - 'printful-test'     # Test Printful auth
+          - 'full-upload'       # Try both Printful and Shopify
+      artifact_pattern:
+        description: 'Artifact name pattern'
+        required: false
+        default: '*-designs-*'
+        type: string
+      dry_run:
+        description: 'Test without uploading'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+  PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+  MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT || '1.4' }}
+  GITHUB_REPO: ${{ github.repository }}
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Download design artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Create directory for designs
+          const downloadDir = 'downloaded_designs';
+          if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir);
+          }
+          
+          // Get artifacts
+          const artifacts = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+          
+          // Download design artifacts
+          let downloadCount = 0;
+          for (const artifact of artifacts.data.artifacts) {
+            if (artifact.name.match(/.*designs.*/)) {
+              console.log(`Downloading ${artifact.name}...`);
+              
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+                archive_format: 'zip'
+              });
+              
+              const artifactPath = path.join(downloadDir, `${artifact.name}.zip`);
+              fs.writeFileSync(artifactPath, Buffer.from(download.data));
+              downloadCount++;
+            }
+          }
+          
+          console.log(`Downloaded ${downloadCount} artifacts`);
+    
+    - name: Extract artifacts and prepare files
+      id: prepare_files
+      run: |
+        mkdir -p all_designs
+        cd downloaded_designs
+        
+        # Extract all zip files
+        for zip in *.zip; do
+          echo "Extracting $zip..."
+          unzip -q -o "$zip" -d ../all_designs/ || true
+        done
+        
+        cd ../all_designs
+        
+        # Move all designs to root
+        find . -name "design_*.png" -type f -exec mv {} ../ \;
+        
+        cd ..
+        
+        # Count files
+        FILE_COUNT=$(ls design_*.png 2>/dev/null | wc -l)
+        echo "Total design files: $FILE_COUNT"
+        echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
+        
+        # Create a temporary branch for hosting files
+        if [ $FILE_COUNT -gt 0 ]; then
+          # Configure git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Create orphan branch for hosting
+          git checkout --orphan design-hosting || git checkout design-hosting
+          
+          # Add design files
+          git add design_*.png
+          git commit -m "Host design files for Printful upload" || echo "No changes to commit"
+          
+          # Push to GitHub (this makes files accessible via raw URLs)
+          git push origin design-hosting --force || echo "Push failed, continuing..."
+        fi
+    
+    - name: Test Printful Authentication
+      if: inputs.mode == 'printful-test' || inputs.mode == 'full-upload'
+      run: |
+        echo "🔐 Testing Printful API authentication..."
+        
+        # Test with new v2 script
+        python upload_manager_v2.py --check-auth
+    
+    - name: Create upload configuration
+      run: |
+        # Create configuration file for file hosting
+        cat > upload_config.json << EOF
+        {
+          "file_hosting": {
+            "method": "github_raw",
+            "base_url": "https://raw.githubusercontent.com/${{ github.repository }}/design-hosting/"
+          },
+          "api_version": "2025",
+          "placement": "front_large"
+        }
+        EOF
+        
+        echo "Upload configuration:"
+        cat upload_config.json
+    
+    - name: Run upload manager
+      if: steps.prepare_files.outputs.file_count > 0
+      run: |
+        echo "📤 Starting upload process..."
+        echo "Mode: ${{ inputs.mode }}"
+        
+        # Build command based on mode
+        CMD="python upload_manager_v2.py"
+        
+        if [ "${{ inputs.mode }}" = "shopify-only" ]; then
+          CMD="$CMD --shopify-only"
+        fi
+        
+        if [ "${{ inputs.dry_run }}" = "true" ]; then
+          CMD="$CMD --dry-run"
+        fi
+        
+        # Execute
+        eval $CMD || echo "Upload completed with some errors"
+    
+    - name: Upload tracker
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: upload-tracker-${{ github.run_number }}
+        path: |
+          upload_tracker.json
+          upload_config.json
+        retention-days: 90
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## 📊 Upload Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Mode**: ${{ inputs.mode }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Dry Run**: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # File count
+        if [ -f upload_tracker.json ]; then
+          echo "### Upload Statistics" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          jq '.stats' upload_tracker.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Important notes
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ⚠️ Known Issues" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Cloudflare Protection**: Printful API may be blocked by Cloudflare from GitHub Actions" >> $GITHUB_STEP_SUMMARY
+        echo "- **File Hosting**: Designs need public URLs. Currently using GitHub raw URLs." >> $GITHUB_STEP_SUMMARY
+        echo "- **API Changes**: Using 'front_large' placement (not 'front') per 2025 requirements" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 💡 Recommendations" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "1. **Use Shopify-only mode** to avoid Cloudflare issues" >> $GITHUB_STEP_SUMMARY
+        echo "2. **Run locally** for better Printful success rates" >> $GITHUB_STEP_SUMMARY
+        echo "3. **Check OAuth token** - must be Bearer token, not old API key" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Cleanup design branch
+      if: always()
+      continue-on-error: true
+      run: |
+        # Return to main branch
+        git checkout main || git checkout master || echo "Could not switch branch"
+        
+        # Optional: delete design-hosting branch after use
+        # git push origin --delete design-hosting || echo "Could not delete branch"
