@@ -1,105 +1,90 @@
-# T-Shirt Generator for GitHub Actions 🎨👕
+# T-Shirt Design Generator - Improvements
 
-Automated T-shirt design generator using AI (DALL-E 3) with Printful and Shopify integration.
-Designed specifically for GitHub Actions - no local setup needed!
+## 🎯 Key Fixes
 
-## Setup
+### Fixed Multiple Image Problem
+The main issue of designs containing multiple versions/comparisons has been fixed by:
 
-### 1. Add Repository Secrets
+1. **Explicit Single Design Instructions**: Every prompt now explicitly states to create "ONE unified design" and "no multiple versions, comparisons, or split compositions"
 
-Go to **Settings** → **Secrets and variables** → **Actions** and add:
+2. **Anti-Duplication Language**: Added specific instructions against creating:
+   - Multiple panels
+   - Before/after comparisons
+   - Split screens
+   - Multiple variations
 
-- `OPENAI_API_KEY` - Your OpenAI API key
-- `PRINTFUL_API_KEY` - Your Printful Bearer token (OAuth)
-- `PRINTFUL_STORE_ID` - Your Printful store ID (optional)
-- `SHOPIFY_STORE` - Your Shopify store name (without .myshopify.com)
-- `SHOPIFY_ACCESS_TOKEN` - Your Shopify Admin API access token
-- `MARKUP_PERCENT` - Price markup (e.g., 1.4 for 40% markup)
+3. **Technical Specifications**: Clear requirements for:
+   - Single, centered composition
+   - One cohesive design element
+   - No panels or variations
 
-### 2. Add Files to Repository
+## 🎨 New Categories Added
 
-Copy all these files to your repository:
-- `generate_tee.py` - Main generator
-- `bulk_generate.py` - Bulk generation
-- `collections.json` - Design categories
-- `requirements.txt` - Python dependencies
-- `.github/workflows/generate-tshirt.yml` - Automatic workflow
-- `.github/workflows/manual-generate.yml` - Manual workflow
+The following categories have been added to the generator:
 
-### 3. That's It!
+- **Party** - Disco balls, neon lights, celebration themes
+- **Anniversary** - Romantic celebrations, milestone moments
+- **British Humour** - Tea time chaos, queue jumping, dry wit
+- **Birthday** - Cake explosions, party hats, birthday vibes
+- **Christmas** - Santa's workshop, winter wonderland, festive themes
+- **Summer** - Beach vibes, tropical drinks, sunshine
+- **Winter** - Cozy fireplaces, snowflakes, winter sports
+- **Memes** - Internet culture, viral moments, trending topics
 
-The workflows will run automatically on:
-- Push to main branch
-- Daily at 10 AM UTC
-- Manual trigger from Actions tab
+## 📁 Files Included
 
-## Usage
+1. **generate_tee.py** - Main generator with fixed prompts
+2. **bulk_generate.py** - Bulk generation with category selection
+3. **collections.json** - All categories with themes and tags
+4. **requirements.txt** - Python dependencies
+5. **.github/workflows/generate-tshirt.yml** - Automated workflow
+6. **.github/workflows/manual-generate.yml** - Manual trigger workflow
 
-### Automatic Generation
+## 🚀 How to Use
 
-Happens automatically when you push code or on schedule.
+1. **Set up GitHub Secrets**:
+   - `OPENAI_API_KEY` - Your OpenAI API key
+   - `PRINTFUL_API_KEY` - Your Printful Bearer token
+   - `PRINTFUL_STORE_ID` - Your Printful store ID (optional)
+   - `SHOPIFY_STORE` - Your Shopify store name
+   - `SHOPIFY_ACCESS_TOKEN` - Your Shopify Admin API token
+   - `MARKUP_PERCENT` - Price markup (e.g., 1.4 for 40%)
 
-### Manual Generation
+2. **Automatic Generation**:
+   - Pushes to main branch trigger generation
+   - Daily generation at 10 AM UTC
+   - Generates random category designs
 
-1. Go to **Actions** tab
-2. Select **Manual T-Shirt Generation**
-3. Click **Run workflow**
-4. Options:
-   - **Category**: Leave empty for random, or specify (e.g., `gaming`)
-   - **Count**: Number of designs (default: 1)
-   - **Delay**: Seconds between designs (default: 5)
+3. **Manual Generation**:
+   - Go to Actions → Manual T-Shirt Generation
+   - Select category (or random)
+   - Choose number of designs (1-20)
+   - Set delay between generations
 
-### View Results
+## 🎯 Example Prompts
 
-After each run:
-1. Go to the workflow run
-2. Download artifacts at the bottom
-3. Contains:
-   - Generated PNG files
-   - Log file with details
+The new prompts ensure single designs by using language like:
 
-## Available Categories
-
-- `birthday-party` - Birthday celebrations
-- `christmas-festive` - Holiday designs
-- `gaming` - Gaming culture
-- `fitness` - Gym & workout
-- `coffee` - Coffee lovers
-- `foodie` - Food enthusiasts
-- `dad-jokes` - Dad humor
-- `sarcastic` - Sarcastic humor
-- `music` - Music lovers
-- `positive-vibes` - Positive motivation
-
-## Important Notes
-
-### Printful Setup
-- Must use a "Manual Order/API" platform store
-- Use OAuth Bearer token (not old API key)
-
-### Shopify Setup (Optional)
-- Create private app with Products read/write
-- Use Admin API access token
-
-## Troubleshooting
-
-### "Missing API keys" Error
-Check that your workflow has the `env:` section:
-```yaml
-env:
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
-  # etc...
+```
+Create a SINGLE, professional t-shirt design...
+CRITICAL: Generate only ONE unified design - absolutely no multiple versions...
 ```
 
-### Check Logs
-Download artifacts after each run to see detailed logs.
+## 📊 Categories Overview
 
-## No Local Setup Needed!
+Total categories: **15**
+- Original: gaming, nature, abstract, vintage, fitness, coffee, music
+- New: party, anniversary, british-humour, birthday, christmas, summer, winter, memes
 
-Everything runs in GitHub Actions. No need for:
-- Local Python installation
-- .env files
-- API key files
+Each category has:
+- 10 unique themes
+- Specific style guidelines
+- Relevant tags for SEO
 
-Just add your secrets and push the code! 🚀
+## 🔧 Technical Improvements
+
+1. **Better Error Handling**: Comprehensive try-catch blocks
+2. **Detailed Logging**: JSON logs for all generations
+3. **Bulk Generation**: Generate multiple designs efficiently
+4. **GitHub Actions Integration**: Full CI/CD pipeline
+5. **Artifact Storage**: Automatic storage of designs and logs
