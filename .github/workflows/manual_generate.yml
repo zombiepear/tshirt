@@ -4,65 +4,142 @@ on:
   workflow_dispatch:
     inputs:
       category:
-        description: 'Category (e.g., gaming, coffee, fitness) - leave empty for random'
-        required: false
-        type: string
-        default: ''
+        description: 'Design category'
+        required: true
+        type: choice
+        options:
+          - 'random'
+          - 'gaming'
+          - 'nature'
+          - 'abstract'
+          - 'vintage'
+          - 'party'
+          - 'anniversary'
+          - 'british-humour'
+          - 'birthday'
+          - 'christmas'
+          - 'summer'
+          - 'winter'
+          - 'memes'
+          - 'fitness'
+          - 'coffee'
+          - 'music'
       count:
         description: 'Number of designs to generate'
-        required: false
-        type: string
+        required: true
         default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '10'
+          - '15'
+          - '20'
       delay:
         description: 'Delay between generations (seconds)'
-        required: false
-        type: string
+        required: true
         default: '5'
+        type: choice
+        options:
+          - '3'
+          - '5'
+          - '10'
+          - '15'
+          - '30'
+      upload_to_stores:
+        description: 'Upload to Printful/Shopify?'
+        required: true
+        default: 'true'
+        type: boolean
+
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  PRINTFUL_API_KEY: ${{ inputs.upload_to_stores == 'true' && secrets.PRINTFUL_API_KEY || '' }}
+  PRINTFUL_STORE_ID: ${{ inputs.upload_to_stores == 'true' && secrets.PRINTFUL_STORE_ID || '' }}
+  SHOPIFY_STORE: ${{ inputs.upload_to_stores == 'true' && secrets.SHOPIFY_STORE || '' }}
+  SHOPIFY_ACCESS_TOKEN: ${{ inputs.upload_to_stores == 'true' && secrets.SHOPIFY_ACCESS_TOKEN || '' }}
+  MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT || '1.4' }}
 
 jobs:
   generate:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v3
     
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.10'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Generate T-Shirts
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
-        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
-        SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-        MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
+    - name: Generate designs
       run: |
-        if [ "${{ inputs.count }}" = "1" ] && [ -z "${{ inputs.category }}" ]; then
-          echo "🎲 Generating single random design..."
-          python generate_tee.py
-        elif [ -n "${{ inputs.category }}" ]; then
-          echo "🎯 Generating ${{ inputs.count }} design(s) for category: ${{ inputs.category }}"
-          python bulk_generate.py --count ${{ inputs.count }} --categories "${{ inputs.category }}" --delay ${{ inputs.delay }}
+        if [ "${{ github.event.inputs.category }}" = "random" ]; then
+          python bulk_generate.py \
+            --count ${{ github.event.inputs.count }} \
+            --delay ${{ github.event.inputs.delay }}
         else
-          echo "🎨 Generating ${{ inputs.count }} random designs..."
-          python bulk_generate.py --count ${{ inputs.count }} --delay ${{ inputs.delay }}
+          python bulk_generate.py \
+            --category "${{ github.event.inputs.category }}" \
+            --count ${{ github.event.inputs.count }} \
+            --delay ${{ github.event.inputs.delay }}
         fi
     
-    - name: Upload results
+    - name: Create summary
       if: always()
-      uses: actions/upload-artifact@v4
+      run: |
+        echo "## T-Shirt Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Category**: ${{ github.event.inputs.category }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Count**: ${{ github.event.inputs.count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Delay**: ${{ github.event.inputs.delay }}s" >> $GITHUB_STEP_SUMMARY
+        echo "- **Upload to stores**: ${{ github.event.inputs.upload_to_stores }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Generated Designs" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # List generated PNG files
+        if ls design_*.png 1> /dev/null 2>&1; then
+          for file in design_*.png; do
+            echo "- ✅ $file" >> $GITHUB_STEP_SUMMARY
+          done
+        else
+          echo "❌ No designs were generated" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Upload generated designs
+      uses: actions/upload-artifact@v3
+      if: always()
       with:
-        name: manual-generation-${{ github.run_number }}
+        name: tshirt-designs-${{ github.event.inputs.category }}-${{ github.run_number }}
         path: |
-          tshirt_generator.log
-          *.png
+          design_*.png
+          generation_log.json
+          bulk_generation_*.json
+        retention-days: 30
+    
+    - name: Upload logs
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: error-logs-${{ github.run_number }}
+        path: |
+          *.log
         retention-days: 7
