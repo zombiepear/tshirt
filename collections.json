@@ -1,62 +1,94 @@
 {
-  "birthday-party": {
-    "name": "Birthday Celebrations",
-    "title": "Birthday Party Vibes",
-    "theme": "Birthday party t-shirt design, cake, balloons, party hats, funny age jokes, birthday wishes",
-    "tags": ["birthday", "party", "celebration", "fun"]
-  },
-  "christmas-festive": {
-    "name": "Christmas & Holiday",
-    "title": "Holiday Cheer",
-    "theme": "Christmas holiday t-shirt design, Santa, reindeer, snow, festive vibes, holiday cheer",
-    "tags": ["christmas", "holiday", "festive", "winter"]
-  },
-  "gaming": {
-    "name": "Gaming Life",
-    "title": "Game On",
-    "theme": "Gaming t-shirt design, controllers, retro games, achievement unlocked, gamer life",
-    "tags": ["gaming", "gamer", "hobby", "tech"]
-  },
-  "fitness": {
-    "name": "Fitness & Gym",
-    "title": "Beast Mode",
-    "theme": "Fitness motivation t-shirt design, gym life, workout humor, gains, beast mode activated",
-    "tags": ["fitness", "gym", "workout", "health"]
-  },
-  "coffee": {
-    "name": "Coffee Addicts",
-    "title": "But First Coffee",
-    "theme": "Coffee lover t-shirt design, espresso, latte art, caffeine addiction, morning fuel",
-    "tags": ["coffee", "caffeine", "lifestyle", "morning"]
-  },
-  "foodie": {
-    "name": "Foodie Life",
-    "title": "Food is Life",
-    "theme": "Foodie t-shirt design, pizza, tacos, burgers, food puns, always hungry",
-    "tags": ["food", "foodie", "lifestyle", "humor"]
-  },
-  "dad-jokes": {
-    "name": "Dad Jokes",
-    "title": "Dad Joke Champion",
-    "theme": "Dad joke t-shirt design, puns, groaner humor, dad life, terrible jokes that are actually funny",
-    "tags": ["humor", "dad", "jokes", "funny"]
-  },
-  "sarcastic": {
-    "name": "Sarcastic Humor",
-    "title": "Sarcasm Loading",
-    "theme": "Sarcastic humor t-shirt design, witty comebacks, eye rolls, sassy attitude, clever wordplay",
-    "tags": ["sarcasm", "humor", "witty", "funny"]
-  },
-  "music": {
-    "name": "Music Lovers",
-    "title": "Drop the Beat",
-    "theme": "Music lover t-shirt design, headphones, vinyl records, concert vibes, musical instruments",
-    "tags": ["music", "concert", "hobby", "entertainment"]
-  },
-  "positive-vibes": {
-    "name": "Positive Vibes",
-    "title": "Good Vibes Only",
-    "theme": "Positive vibes t-shirt design, happiness, sunshine, optimism, spreading joy",
-    "tags": ["positive", "happy", "vibes", "motivation"]
+  "collections": {
+    "gaming": {
+      "name": "Gaming Culture",
+      "description": "Designs for gamers and gaming enthusiasts",
+      "themes": ["retro arcade", "RPG adventure", "pixel art", "gaming controller", "achievement unlocked", "game over", "respawn", "boss battle", "speed run", "gaming setup"],
+      "tags": ["gaming", "gamer", "video games", "esports", "arcade"]
+    },
+    "nature": {
+      "name": "Nature & Outdoors",
+      "description": "Beautiful nature-inspired designs",
+      "themes": ["mountain landscape", "ocean waves", "forest scene", "sunset view", "wildlife", "camping adventure", "starry night", "desert cactus", "tropical paradise", "aurora borealis"],
+      "tags": ["nature", "outdoors", "landscape", "adventure", "wilderness"]
+    },
+    "abstract": {
+      "name": "Abstract Art",
+      "description": "Modern abstract and geometric designs",
+      "themes": ["geometric patterns", "fluid dynamics", "color explosion", "minimalist shapes", "optical illusion", "sacred geometry", "wave patterns", "crystalline structures", "mandala design", "fractal art"],
+      "tags": ["abstract", "geometric", "modern art", "minimalist", "artistic"]
+    },
+    "vintage": {
+      "name": "Vintage & Retro",
+      "description": "Classic vintage and retro-inspired designs",
+      "themes": ["retro typography", "classic car", "old school radio", "vintage camera", "record player", "typewriter", "antique telephone", "retro diner", "vintage motorcycle", "classic movie poster"],
+      "tags": ["vintage", "retro", "classic", "nostalgic", "old school"]
+    },
+    "party": {
+      "name": "Party & Celebration",
+      "description": "Fun party and celebration designs",
+      "themes": ["disco ball", "neon lights party", "confetti celebration", "dance floor vibes", "party animals", "celebration time", "festival mood", "birthday bash", "cocktail party", "rave culture"],
+      "tags": ["party", "celebration", "fun", "festive", "dance"]
+    },
+    "anniversary": {
+      "name": "Anniversary",
+      "description": "Romantic anniversary celebration designs",
+      "themes": ["love celebration", "milestone moment", "golden anniversary", "silver jubilee", "romantic celebration", "years together", "eternal bond", "anniversary roses", "champagne toast", "timeless love"],
+      "tags": ["anniversary", "love", "romance", "celebration", "milestone"]
+    },
+    "british-humour": {
+      "name": "British Humour",
+      "description": "Witty British humor and cultural designs",
+      "themes": ["tea time chaos", "queue jumping scandal", "weather complaints", "british bulldog", "keep calm parody", "full english breakfast", "london underground", "rainy day mood", "pub culture", "british sarcasm"],
+      "tags": ["british", "humor", "uk", "sarcasm", "witty"]
+    },
+    "birthday": {
+      "name": "Birthday",
+      "description": "Fun birthday celebration designs",
+      "themes": ["birthday cake explosion", "party hat fun", "balloon celebration", "birthday squad", "aging like wine", "birthday king/queen", "make a wish", "another year wiser", "birthday vibes", "cake and confetti"],
+      "tags": ["birthday", "celebration", "party", "cake", "special day"]
+    },
+    "christmas": {
+      "name": "Christmas",
+      "description": "Festive Christmas and holiday designs",
+      "themes": ["santa's workshop", "christmas tree magic", "winter wonderland", "reindeer games", "ugly sweater pattern", "holiday cheer", "snowman party", "christmas lights", "gingerbread house", "festive ornaments"],
+      "tags": ["christmas", "holiday", "festive", "winter", "santa"]
+    },
+    "summer": {
+      "name": "Summer Vibes",
+      "description": "Bright and fun summer designs",
+      "themes": ["beach vibes", "summer sunset", "tropical drinks", "surfing waves", "ice cream truck", "pool party", "summer road trip", "beach volleyball", "sunshine state", "summer festival"],
+      "tags": ["summer", "beach", "sun", "vacation", "tropical"]
+    },
+    "winter": {
+      "name": "Winter",
+      "description": "Cool winter and snow-themed designs",
+      "themes": ["cozy fireplace", "snowflake pattern", "winter cabin", "hot chocolate mood", "skiing adventure", "frozen landscape", "winter wildlife", "ice skating", "snowy mountains", "aurora winter"],
+      "tags": ["winter", "snow", "cold", "cozy", "seasonal"]
+    },
+    "memes": {
+      "name": "Memes & Internet Culture",
+      "description": "Modern internet culture and meme designs",
+      "themes": ["internet culture", "viral moment", "meme lord", "dank vibes", "trending now", "social media chaos", "emoji overload", "hashtag life", "viral sensation", "meme energy"],
+      "tags": ["memes", "internet", "viral", "social media", "trending"]
+    },
+    "fitness": {
+      "name": "Fitness & Gym",
+      "description": "Motivational fitness and gym designs",
+      "themes": ["gym motivation", "workout warrior", "fitness journey", "muscle power", "cardio queen", "lift heavy", "fitness goals", "sweat equity", "gym life", "beast mode"],
+      "tags": ["fitness", "gym", "workout", "motivation", "health"]
+    },
+    "coffee": {
+      "name": "Coffee Lovers",
+      "description": "Designs for coffee enthusiasts",
+      "themes": ["coffee addiction", "espresso yourself", "coffee beans", "cafe vibes", "morning ritual", "coffee chemistry", "latte art", "coffee shop", "caffeine molecule", "coffee lover"],
+      "tags": ["coffee", "caffeine", "cafe", "morning", "beverage"]
+    },
+    "music": {
+      "name": "Music",
+      "description": "Music-inspired designs for music lovers",
+      "themes": ["sound waves", "vinyl records", "guitar hero", "music festival", "headphones on", "piano keys", "music notes", "concert vibes", "DJ setup", "rock and roll"],
+      "tags": ["music", "audio", "concert", "musician", "melody"]
+    }
   }
 }
