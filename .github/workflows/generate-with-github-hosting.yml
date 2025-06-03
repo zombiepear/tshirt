@@ -1,0 +1,251 @@
+name: Generate T-Shirt with GitHub Hosting
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 10 * * *'  # Daily at 10 AM UTC
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Need write permission to push files
+      pages: write     # For GitHub Pages
+      id-token: write  # For GitHub Pages
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0  # Full history for pushing
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install openai==1.12.0 requests==2.31.0 Pillow==10.0.0
+        python -c "import openai; print(f'OpenAI version: {openai.__version__}')"
+    
+    - name: Run T-Shirt Generator
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
+        PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
+        SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+      run: |
+        echo "🎨 Generating T-Shirt Design..."
+        python generate_tee.py
+    
+    - name: Commit generated designs
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add all generated files
+        git add designs/*.png designs/*.json *.log || true
+        
+        # Commit if there are changes
+        if git diff --staged --quiet; then
+          echo "No new designs to commit"
+        else
+          git commit -m "🎨 Add T-shirt designs from run ${{ github.run_number }}"
+          git push origin main
+        fi
+    
+    # Optional: Deploy to GitHub Pages for better URLs
+    - name: Setup GitHub Pages
+      if: success()
+      uses: actions/configure-pages@v3
+    
+    - name: Prepare Pages content
+      run: |
+        # Create a simple index.html for browsing designs
+        mkdir -p _site
+        cp -r designs _site/ || mkdir -p _site/designs
+        
+        # Create index.html
+        cat > _site/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>T-Shirt Designs</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: #f5f5f5;
+                }
+                h1 { color: #333; margin-bottom: 30px; }
+                .designs {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                    gap: 20px;
+                }
+                .design {
+                    background: white;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    transition: transform 0.2s;
+                }
+                .design:hover { transform: translateY(-5px); }
+                .design img {
+                    width: 100%;
+                    height: auto;
+                    display: block;
+                }
+                .design-info {
+                    padding: 15px;
+                }
+                .design-title {
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+                .design-date {
+                    color: #666;
+                    font-size: 0.9em;
+                }
+                .no-designs {
+                    text-align: center;
+                    color: #666;
+                    margin: 50px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>🎨 T-Shirt Design Gallery</h1>
+            <div id="designs" class="designs">
+                <p class="no-designs">Loading designs...</p>
+            </div>
+            
+            <script>
+                // Simple script to load and display designs
+                async function loadDesigns() {
+                    const designsDiv = document.getElementById('designs');
+                    
+                    try {
+                        // In a real implementation, you'd fetch this from an API or directory listing
+                        // For now, we'll check for known patterns
+                        const response = await fetch('designs/');
+                        
+                        if (!response.ok) {
+                            designsDiv.innerHTML = '<p class="no-designs">No designs found yet. Check back later!</p>';
+                            return;
+                        }
+                        
+                        // Parse directory listing (GitHub Pages specific)
+                        const text = await response.text();
+                        const imgRegex = /href="([^"]+\.png)"/g;
+                        const matches = [...text.matchAll(imgRegex)];
+                        
+                        if (matches.length === 0) {
+                            designsDiv.innerHTML = '<p class="no-designs">No designs found yet. Check back later!</p>';
+                            return;
+                        }
+                        
+                        designsDiv.innerHTML = '';
+                        
+                        matches.forEach(match => {
+                            const filename = match[1];
+                            const designEl = document.createElement('div');
+                            designEl.className = 'design';
+                            designEl.innerHTML = `
+                                <img src="designs/${filename}" alt="${filename}">
+                                <div class="design-info">
+                                    <div class="design-title">${filename.replace('.png', '').replace(/_/g, ' ')}</div>
+                                    <div class="design-date">View on GitHub</div>
+                                </div>
+                            `;
+                            designsDiv.appendChild(designEl);
+                        });
+                        
+                    } catch (error) {
+                        console.error('Error loading designs:', error);
+                        designsDiv.innerHTML = '<p class="no-designs">Error loading designs. Please check the repository.</p>';
+                    }
+                }
+                
+                // Load designs on page load
+                loadDesigns();
+            </script>
+        </body>
+        </html>
+        EOF
+        
+        # Create a designs index
+        cat > _site/designs/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Design Files</title>
+        </head>
+        <body>
+            <h1>T-Shirt Design Files</h1>
+            <p>These files are used by the Printful API.</p>
+        </body>
+        </html>
+        EOF
+    
+    - name: Upload Pages artifact
+      if: success()
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: '_site'
+    
+    - name: Deploy to GitHub Pages
+      if: success()
+      id: deployment
+      uses: actions/deploy-pages@v2
+    
+    - name: Wait for GitHub Pages deployment
+      if: success()
+      run: |
+        echo "⏳ Waiting for GitHub Pages to be ready..."
+        sleep 30  # Give GitHub Pages time to deploy
+        
+        # Test if the designs are accessible
+        PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+        echo "📍 GitHub Pages URL: $PAGES_URL"
+        
+        # List generated files
+        echo "📁 Generated files:"
+        ls -la designs/ || echo "No designs directory found"
+    
+    - name: Upload generation artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: generation-results-${{ github.run_number }}
+        path: |
+          tshirt_generator.log
+          designs/*.png
+          designs/*.json
+        retention-days: 30
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "## 📊 Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **GitHub Pages:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📁 Generated Files:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        ls -la designs/ 2>/dev/null || echo "No designs found" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
