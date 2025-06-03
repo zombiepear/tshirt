@@ -202,3 +202,57 @@
 2025-06-03 02:29:56,190 - INFO - ✅ Daily generation complete!
 2025-06-03 02:29:56,190 - INFO - 💡 Note: If using GitHub Pages, wait for deployment before Printful can access files
 2025-06-03 02:29:56,190 - INFO - ==================================================
+2025-06-03 02:33:18,440 - INFO - 📍 Running in: GitHub Actions
+2025-06-03 02:33:18,440 - INFO - 🐍 Python version: 3.11.12 (main, Apr  8 2025, 21:35:04) [GCC 13.3.0]
+2025-06-03 02:33:18,440 - INFO - OpenAI library version: 1.12.0
+2025-06-03 02:33:18,487 - INFO - ✅ OpenAI client initialized successfully
+2025-06-03 02:33:18,488 - INFO - ✅ Loaded 5 collections
+2025-06-03 02:33:18,488 - INFO - 🏪 Store ID: 16092638
+2025-06-03 02:33:18,488 - INFO - 📦 GitHub Repo: zombiepear/tshirt
+2025-06-03 02:33:18,488 - INFO - 
+==================================================
+2025-06-03 02:33:18,488 - INFO - 🚀 Starting Daily T-Shirt Generation
+2025-06-03 02:33:18,488 - INFO - 📅 Date: 2025-06-03 02:33:18
+2025-06-03 02:33:18,488 - INFO - ==================================================
+2025-06-03 02:33:18,488 - INFO - 🔧 Store ID: 16092638
+2025-06-03 02:33:18,488 - INFO - 💰 Markup: 10.0%
+2025-06-03 02:33:18,828 - INFO - ✅ Printful API connection verified
+2025-06-03 02:33:18,828 - INFO - 📋 Store: TShirt.UK
+2025-06-03 02:33:18,828 - INFO - 📋 Type: shopify
+2025-06-03 02:33:18,828 - INFO - 💡 Shopify store detected - products sync through Shopify
+2025-06-03 02:33:18,828 - INFO - 📊 Today's collection (day 3): nature-inspired
+2025-06-03 02:33:18,828 - INFO - 
+🎯 Processing category: nature-inspired
+2025-06-03 02:33:18,828 - INFO - 📋 Collection: Nature Vibes
+2025-06-03 02:33:19,506 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-03 02:33:19,507 - INFO - 🎯 Theme: Northern lights aurora design with summer vibes
+2025-06-03 02:33:19,507 - INFO - 📝 Title: 1. "Aurora Summer Glow Tee"
+2. "Northern Lights Summer Dream Shirt"
+3
+2025-06-03 02:33:19,507 - INFO - 🎨 Generating design with DALL-E 3...
+2025-06-03 02:33:31,030 - INFO - HTTP Request: POST https://api.openai.com/v1/images/generations "HTTP/1.1 200 OK"
+2025-06-03 02:33:31,407 - INFO - ✅ Design generated successfully
+2025-06-03 02:33:31,407 - INFO - 🖼️ Preparing image for Printful...
+2025-06-03 02:33:32,625 - INFO - 💾 Saved design as designs/nature-inspired_20250603_023332.png
+2025-06-03 02:33:32,625 - INFO - 🌐 GitHub URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_023332.png
+2025-06-03 02:33:32,626 - INFO - 📝 Running in GitHub Actions - file will be pushed by workflow
+2025-06-03 02:33:32,626 - INFO - 💡 Printful upload may need to wait for GitHub Pages deployment
+2025-06-03 02:33:32,626 - INFO - 📤 Uploading to Printful File Library...
+2025-06-03 02:33:32,626 - INFO - 📎 URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_023332.png
+2025-06-03 02:33:33,239 - INFO - ✅ File uploaded successfully. ID: 835853195
+2025-06-03 02:33:33,239 - INFO - 📎 Printful URL: https://zombiepear.github.io/tshirt/designs/nature-inspired_20250603_023332.png
+2025-06-03 02:33:33,240 - INFO - 🛍️ Creating Printful product...
+2025-06-03 02:33:33,240 - INFO - 📝 Creating product...
+2025-06-03 02:33:33,411 - ERROR - ❌ Product creation failed: 400
+2025-06-03 02:33:33,411 - ERROR - Response: {"code":400,"result":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs.","error":{"reason":"BadRequest","message":"This API endpoint applies only to Printful stores based on the Manual Order / API platform. Find out more at Printful API docs."}}
+2025-06-03 02:33:33,411 - INFO - 💡 This is expected for Shopify stores - products sync through Shopify
+2025-06-03 02:33:33,412 - INFO - ✅ Successfully processed nature-inspired
+2025-06-03 02:33:33,412 - INFO - 🎨 Title: 1. "Aurora Summer Glow Tee"
+2. "Northern Lights Summer Dream Shirt"
+3
+2025-06-03 02:33:33,412 - INFO - 🆔 Product ID: shopify-sync-pending
+2025-06-03 02:33:33,412 - INFO - 
+==================================================
+2025-06-03 02:33:33,412 - INFO - ✅ Daily generation complete!
+2025-06-03 02:33:33,412 - INFO - 💡 Note: If using GitHub Pages, wait for deployment before Printful can access files
+2025-06-03 02:33:33,412 - INFO - ==================================================
