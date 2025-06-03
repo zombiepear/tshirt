@@ -1,552 +1,396 @@
 #!/usr/bin/env python3
 """
-T-Shirt Generator with GitHub Hosting (Using Raw URLs)
-Fixed prompt to generate ONLY the design, not t-shirt mockups
+T-Shirt Design Generator
+Generates unique t-shirt designs using DALL-E 3 and uploads to Printful/Shopify
 """
 
-# FIX: Patch httpx before importing OpenAI
-import httpx
-_orig = httpx.Client.__init__
-httpx.Client.__init__ = lambda s,**k: _orig(s,**{x:y for x,y in k.items() if x!='proxies'})
-
 import os
-import sys
+import json
+import time
 import random
 import requests
-import json
-import base64
-import logging
-import time
 from datetime import datetime
-from typing import Optional, Dict, List
+from openai import OpenAI
+import base64
 from io import BytesIO
 from PIL import Image
-from openai import OpenAI
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('tshirt_generator.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Initialize OpenAI client
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-class TShirtGenerator:
-    def __init__(self):
-        # API Keys and Config
-        self.openai_api_key = os.environ.get('OPENAI_API_KEY')
-        self.printful_api_key = os.environ.get('PRINTFUL_API_KEY')
-        self.store_id = os.environ.get('PRINTFUL_STORE_ID')
-        self.shopify_store = os.environ.get('SHOPIFY_STORE')
-        self.shopify_token = os.environ.get('SHOPIFY_ACCESS_TOKEN')
-        self.markup_percent = float(os.environ.get('MARKUP_PERCENT', '30'))
-        
-        # GitHub configuration
-        self.github_repo = os.environ.get('GITHUB_REPOSITORY', '')  # e.g., "username/repo"
-        
-        # Validate required environment variables
-        if not all([self.openai_api_key, self.printful_api_key, self.store_id]):
-            raise ValueError("Missing required environment variables")
-        
-        # Initialize OpenAI
-        try:
-            import openai
-            logger.info(f"OpenAI library version: {openai.__version__}")
-            self.openai_client = OpenAI(api_key=self.openai_api_key)
-            logger.info("✅ OpenAI client initialized successfully")
-        except Exception as e:
-            logger.error(f"OpenAI initialization error: {e}")
-            raise
-        
-        # Initialize session
-        self.session = requests.Session()
-        
-        # Printful API setup
-        self.printful_api_url = 'https://api.printful.com'
-        self.printful_headers = {
-            'Authorization': f'Bearer {self.printful_api_key}',
-            'Content-Type': 'application/json',
-            'X-PF-Store-Id': str(self.store_id)
-        }
-        
-        # Collection themes with Printful variant IDs
-        self.collections = {
-            'birthday-party': {
-                'name': 'Birthday Celebrations',
-                'themes': [
-                    "Colorful birthday cake with candles and confetti celebration",
-                    "Party animals (cute cartoon animals) celebrating with balloons and party hats",
-                    "Vintage retro birthday poster with ornate typography",
-                    "Neon lights spelling out birthday wishes in 80s style",
-                    "Minimalist birthday icons: cake, balloon, gift, confetti"
-                ],
-                'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
-            },
-            'retro-gaming': {
-                'name': 'Retro Gaming',
-                'themes': [
-                    "8-bit pixel art game controller floating in space with stars",
-                    "Classic arcade cabinet with glowing screen and neon lights",
-                    "Collection of retro gaming consoles arranged in a pattern",
-                    "Pixelated 'Game Over' screen with coins and hearts",
-                    "8-bit space invaders descending in formation"
-                ],
-                'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
-            },
-            'nature-inspired': {
-                'name': 'Nature Vibes',
-                'themes': [
-                    "Majestic mountain range silhouette at sunset with gradient sky",
-                    "Geometric forest pattern with triangular trees and hidden animals",
-                    "Ocean waves in traditional Japanese art style with foam details",
-                    "Desert landscape with various cacti and succulents under starry sky",
-                    "Northern lights aurora borealis swirling over pine forest"
-                ],
-                'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
-            },
-            'funny-slogans': {
-                'name': 'Humor & Sarcasm',
-                'themes': [
-                    "Grumpy coffee cup character with steam and attitude",
-                    "Computer screen showing funny code comments and error messages",
-                    "Sassy cat with sunglasses giving side-eye",
-                    "Trophy or medal for 'World's Best Dad Jokes'",
-                    "Introvert's battery meter showing low charge in crowds"
-                ],
-                'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
-            },
-            'abstract-art': {
-                'name': 'Abstract & Modern',
-                'themes': [
-                    "Liquid marble effect with swirling colors and gold veins",
-                    "Bold geometric shapes overlapping in vibrant colors",
-                    "Continuous line art drawing forming abstract faces",
-                    "Paint brush strokes in rainbow colors on white background",
-                    "Bauhaus-inspired composition with circles, squares, and triangles"
-                ],
-                'variant_ids': [4011, 4012, 4013, 4014, 4016, 4017]
-            }
-        }
-        
-        logger.info(f"✅ Loaded {len(self.collections)} collections")
-        logger.info(f"🏪 Store ID: {self.store_id}")
-        logger.info(f"📦 GitHub Repo: {self.github_repo}")
-    
-    def verify_printful_connection(self):
-        """Verify Printful API connection and store type."""
-        try:
-            response = self.session.get(
-                f'{self.printful_api_url}/stores/{self.store_id}',
-                headers=self.printful_headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                store_data = response.json()
-                store_type = store_data['result']['type']
-                logger.info("✅ Printful API connection verified")
-                logger.info(f"📋 Store: {store_data['result']['name']}")
-                logger.info(f"📋 Type: {store_type}")
-                
-                if store_type == 'shopify':
-                    logger.info("💡 Shopify store detected - products sync through Shopify")
-                
-                return True
-            else:
-                logger.error(f"❌ Printful API error: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return False
-        except Exception as e:
-            logger.error(f"❌ Error verifying Printful connection: {e}")
-            return False
-    
-    def get_github_url(self, filename: str) -> str:
-        """Generate GitHub URL for the file - using RAW URLs for immediate access."""
-        if self.github_repo:
-            # Use raw GitHub URL - available IMMEDIATELY after push!
-            return f"https://raw.githubusercontent.com/{self.github_repo}/main/designs/{filename}"
-        else:
-            # Fallback
-            logger.warning("GitHub repo not set, using placeholder URL")
-            return f"https://example.com/designs/{filename}"
-    
-    def save_design_locally(self, image_data: bytes, title: str, collection_key: str) -> str:
-        """Save design locally and prepare for GitHub upload."""
-        try:
-            # Create designs directory
-            os.makedirs("designs", exist_ok=True)
-            
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{collection_key}_{timestamp}.png"
-            filepath = os.path.join("designs", filename)
-            
-            # Save image
-            with open(filepath, 'wb') as f:
-                f.write(image_data)
-            
-            logger.info(f"💾 Saved design as {filepath}")
-            
-            # Save metadata
-            metadata = {
-                'title': title,
-                'collection': collection_key,
-                'timestamp': timestamp,
-                'filename': filename,
-                'github_url': self.get_github_url(filename)
-            }
-            
-            metadata_path = os.path.join("designs", f"{collection_key}_{timestamp}_metadata.json")
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            
-            return filename
-                
-        except Exception as e:
-            logger.error(f"Error saving design locally: {e}")
-            return None
-    
-    def upload_to_printful(self, design_url: str, filename: str) -> Optional[str]:
-        """Upload design to Printful using URL-based method."""
-        try:
-            logger.info("📤 Uploading to Printful File Library...")
-            logger.info(f"📎 URL: {design_url}")
-            
-            # Printful expects URL-based file submission
-            url = f'{self.printful_api_url}/files'
-            
-            # Prepare the request data
-            file_data = {
-                'url': design_url,
-                'type': 'default',
-                'filename': filename,
-                'visible': True,
-                'options': []
-            }
-            
-            # Make the request
-            response = self.session.post(
-                url,
-                headers=self.printful_headers,
-                json=file_data,
-                timeout=60
-            )
-            
-            if response.status_code in [200, 201]:
-                result = response.json()
-                file_id = result['result']['id']
-                file_url = result['result'].get('url', design_url)
-                logger.info(f"✅ File uploaded successfully. ID: {file_id}")
-                logger.info(f"📎 Printful URL: {file_url}")
-                return str(file_id)
-            else:
-                logger.error(f"❌ Upload failed: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                
-                if "file URL or data not specified" in response.text:
-                    logger.error("💡 The file URL may not be accessible yet.")
-                    logger.error("💡 Make sure the GitHub workflow has pushed the file.")
-                
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Error uploading to Printful: {e}")
-            return None
-    
-    def get_trending_theme(self, collection_key: str) -> str:
-        """Get a theme from the collection."""
-        collection = self.collections[collection_key]
-        theme = random.choice(collection['themes'])
-        
-        # Add seasonal modifications
-        month = datetime.now().month
-        if month == 12:
-            theme += " with subtle Christmas holiday elements"
-        elif month in [6, 7, 8]:
-            theme += " with bright summer vibes"
-        elif month == 10:
-            theme += " with spooky Halloween elements"
-        
-        return theme
-    
-    def generate_title(self, theme: str, collection_name: str) -> str:
-        """Generate a catchy title for the T-shirt."""
-        try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a creative t-shirt designer. Generate short, catchy product titles."},
-                    {"role": "user", "content": f"Create ONE catchy t-shirt title (max 4 words) for this design theme: {theme}. Collection: {collection_name}. Just give me the title, no numbering or quotes."}
-                ],
-                max_tokens=20,
-                temperature=0.8
-            )
-            
-            title = response.choices[0].message.content.strip().strip('"').strip("'")
-            # Clean up any numbering
-            if title.startswith(('1.', '1)', '1 ')):
-                title = title[2:].strip()
-            return title
-        except Exception as e:
-            logger.error(f"Error generating title: {e}")
-            return f"{collection_name} Tee #{random.randint(100, 999)}"
-    
-    def generate_design(self, theme: str, title: str) -> Optional[Dict]:
-        """Generate a T-shirt design using DALL-E 3."""
-        try:
-            # FIXED PROMPT - No t-shirt mockups!
-            prompt = f"""
-            Create a graphic design for printing on a t-shirt. Theme: {theme}
-            
-            IMPORTANT Requirements:
-            - Create ONLY the artwork/design itself, NOT a t-shirt or clothing mockup
-            - The design should fill the entire square canvas
-            - Style: Bold, eye-catching, suitable for t-shirt printing
-            - High contrast with clear, defined edges
-            - Works well on both light and dark fabric
-            - Modern, trendy, commercially appealing aesthetic
-            - Centered composition
-            - No copyrighted characters or logos
-            - No text unless specifically mentioned in the theme
-            
-            Design style: Professional print-ready artwork
-            """
-            
-            logger.info("🎨 Generating design with DALL-E 3...")
-            logger.info(f"Theme: {theme}")
-            
-            response = self.openai_client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard",
-                response_format="b64_json",
-                n=1
-            )
-            
-            image_b64 = response.data[0].b64_json
-            image_data = base64.b64decode(image_b64)
-            
-            logger.info("✅ Design generated successfully")
-            
-            return {
-                'title': title,
-                'image_data': image_data,
-                'prompt': prompt
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error generating design: {e}")
-            return None
-    
-    def prepare_image_for_printful(self, image_data: bytes) -> bytes:
-        """Prepare image for Printful (resize if needed)."""
-        try:
-            img = Image.open(BytesIO(image_data))
-            
-            # Printful recommends 150-300 DPI
-            # For a 12"x16" print area at 150 DPI: 1800x2400 pixels
-            target_size = (1800, 2400)
-            
-            if img.size != target_size:
-                # Calculate aspect ratio preserving resize
-                img.thumbnail(target_size, Image.Resampling.LANCZOS)
-                
-                # Create new image with transparent background
-                new_img = Image.new('RGBA', target_size, (255, 255, 255, 0))
-                
-                # Paste resized image in center
-                x = (target_size[0] - img.width) // 2
-                y = (target_size[1] - img.height) // 2
-                
-                # Convert to RGBA if needed for transparency
-                if img.mode != 'RGBA':
-                    img = img.convert('RGBA')
-                
-                new_img.paste(img, (x, y), img)
-                
-                # Convert back to RGB for final save
-                final_img = Image.new('RGB', target_size, (255, 255, 255))
-                final_img.paste(new_img, (0, 0), new_img)
-                img = final_img
-            
-            # Ensure RGB mode
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            # Save to bytes
-            output = BytesIO()
-            img.save(output, format='PNG', optimize=True, quality=95)
-            return output.getvalue()
-            
-        except Exception as e:
-            logger.error(f"Error preparing image: {e}")
-            return image_data
-    
-    def create_printful_product(self, title: str, printful_file_id: str, collection: Dict) -> Optional[Dict]:
-        """Create a product in Printful."""
-        try:
-            url = f'{self.printful_api_url}/store/products'
-            
-            # Calculate pricing
-            base_cost = 12.95
-            markup = base_cost * (self.markup_percent / 100)
-            retail_price = int(base_cost + markup) + 0.99
-            
-            # Create variants (simplified - just one size/color for now)
-            variants = [{
-                'variant_id': 4011,  # Unisex Staple T-Shirt - S - Black
-                'retail_price': f"{retail_price:.2f}",
-                'is_enabled': True,
-                'files': [{
-                    'id': printful_file_id,
-                    'placement': 'front'
-                }]
-            }]
-            
-            product_data = {
-                'sync_product': {
-                    'name': title,
-                    'thumbnail': printful_file_id,
-                    'is_ignored': False
-                },
-                'sync_variants': variants
-            }
-            
-            logger.info(f"📝 Creating product...")
-            
-            response = self.session.post(
-                url,
-                headers=self.printful_headers,
-                json=product_data,
-                timeout=30
-            )
-            
-            if response.status_code in [200, 201]:
-                result = response.json()
-                logger.info("✅ Product created successfully")
-                return result['result']
-            else:
-                logger.error(f"❌ Product creation failed: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                
-                if "Manual Order / API platform" in response.text:
-                    logger.info("💡 This is expected for Shopify stores - products sync through Shopify")
-                    return {'sync_product': {'id': 'shopify-sync-pending'}}
-                
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Error creating product: {e}")
-            return None
-    
-    def process_collection(self, collection_key: str):
-        """Process a single collection."""
-        logger.info(f"\n🎯 Processing category: {collection_key}")
-        
-        collection = self.collections[collection_key]
-        logger.info(f"📋 Collection: {collection['name']}")
-        
-        # Get theme and generate title
-        theme = self.get_trending_theme(collection_key)
-        title = self.generate_title(theme, collection['name'])
-        
-        logger.info(f"🎯 Theme: {theme}")
-        logger.info(f"📝 Title: {title}")
-        
-        # Generate design
-        design = self.generate_design(theme, title)
-        if not design:
-            logger.error(f"❌ Failed to generate design for {collection_key}")
-            return
-        
-        # Prepare image for Printful
-        logger.info("🖼️ Preparing image for Printful...")
-        prepared_image = self.prepare_image_for_printful(design['image_data'])
-        
-        # Save locally (will be pushed to GitHub by the workflow)
-        filename = self.save_design_locally(prepared_image, title, collection_key)
-        if not filename:
-            logger.error("❌ Failed to save design locally")
-            return
-        
-        # Get GitHub URL (using raw URL for immediate access)
-        github_url = self.get_github_url(filename)
-        logger.info(f"🌐 GitHub URL: {github_url}")
-        
-        # Note about GitHub Actions
-        if os.environ.get('GITHUB_ACTIONS'):
-            logger.info("📝 Running in GitHub Actions - file will be pushed by workflow")
-            logger.info("💡 Using raw.githubusercontent.com for immediate access")
-        
-        # Upload to Printful
-        file_id = self.upload_to_printful(github_url, filename)
-        
-        if file_id:
-            # Create product
-            logger.info("🛍️ Creating Printful product...")
-            product = self.create_printful_product(title, file_id, collection)
-            
-            if product:
-                logger.info(f"✅ Successfully processed {collection_key}")
-                logger.info(f"🎨 Title: {title}")
-                logger.info(f"🆔 Product ID: {product['sync_product']['id']}")
-        else:
-            logger.warning("⚠️  Printful upload failed - this might be a timing issue")
-            logger.info("💡 The file will be available after GitHub pushes it")
-            logger.info(f"💡 Manual upload URL: {github_url}")
-    
-    def run_daily_generation(self):
-        """Run the daily generation process."""
-        logger.info("\n" + "="*50)
-        logger.info("🚀 Starting Daily T-Shirt Generation")
-        logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("="*50)
-        
-        # Log configuration
-        logger.info(f"🔧 Store ID: {self.store_id}")
-        logger.info(f"💰 Markup: {self.markup_percent}%")
-        
-        # Verify Printful connection first
-        if not self.verify_printful_connection():
-            logger.error("❌ Cannot proceed without Printful connection")
-            return
-        
-        # Determine which collection to process
-        day_of_month = datetime.now().day
-        collection_keys = list(self.collections.keys())
-        collection_index = (day_of_month - 1) % len(collection_keys)
-        collection_to_process = collection_keys[collection_index]
-        
-        logger.info(f"📊 Today's collection (day {day_of_month}): {collection_to_process}")
-        
-        # Process the selected collection
-        self.process_collection(collection_to_process)
-        
-        logger.info("\n" + "="*50)
-        logger.info("✅ Daily generation complete!")
-        logger.info("💡 Note: Using raw GitHub URLs for immediate access")
-        logger.info("="*50)
+# Configuration
+PRINTFUL_API_KEY = os.environ.get("PRINTFUL_API_KEY")
+PRINTFUL_STORE_ID = os.environ.get("PRINTFUL_STORE_ID")
+SHOPIFY_STORE = os.environ.get("SHOPIFY_STORE")
+SHOPIFY_ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN")
+MARKUP_PERCENT = float(os.environ.get("MARKUP_PERCENT", "1.4"))
 
-def main():
-    """Main entry point."""
+# Printful API endpoints
+PRINTFUL_API_BASE = "https://api.printful.com"
+SHOPIFY_API_BASE = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+
+# Design categories with themes
+DESIGN_CATEGORIES = {
+    "gaming": {
+        "themes": ["retro arcade", "RPG adventure", "pixel art", "gaming controller", "achievement unlocked", 
+                   "game over", "respawn", "boss battle", "speed run", "gaming setup"],
+        "style": "modern gaming aesthetic with vibrant colors"
+    },
+    "nature": {
+        "themes": ["mountain landscape", "ocean waves", "forest scene", "sunset view", "wildlife", 
+                   "camping adventure", "starry night", "desert cactus", "tropical paradise", "aurora borealis"],
+        "style": "natural beauty with organic shapes"
+    },
+    "abstract": {
+        "themes": ["geometric patterns", "fluid dynamics", "color explosion", "minimalist shapes", 
+                   "optical illusion", "sacred geometry", "wave patterns", "crystalline structures", 
+                   "mandala design", "fractal art"],
+        "style": "modern abstract art with bold composition"
+    },
+    "vintage": {
+        "themes": ["retro typography", "classic car", "old school radio", "vintage camera", 
+                   "record player", "typewriter", "antique telephone", "retro diner", 
+                   "vintage motorcycle", "classic movie poster"],
+        "style": "distressed retro aesthetic with weathered effects"
+    },
+    "party": {
+        "themes": ["disco ball", "neon lights party", "confetti celebration", "dance floor vibes", 
+                   "party animals", "celebration time", "festival mood", "birthday bash", 
+                   "cocktail party", "rave culture"],
+        "style": "vibrant party atmosphere with energetic design"
+    },
+    "anniversary": {
+        "themes": ["love celebration", "milestone moment", "golden anniversary", "silver jubilee", 
+                   "romantic celebration", "years together", "eternal bond", "anniversary roses", 
+                   "champagne toast", "timeless love"],
+        "style": "elegant and romantic with sophisticated touches"
+    },
+    "british-humour": {
+        "themes": ["tea time chaos", "queue jumping scandal", "weather complaints", "british bulldog", 
+                   "keep calm parody", "full english breakfast", "london underground", "rainy day mood", 
+                   "pub culture", "british sarcasm"],
+        "style": "witty British design with dry humor elements"
+    },
+    "birthday": {
+        "themes": ["birthday cake explosion", "party hat fun", "balloon celebration", "birthday squad", 
+                   "aging like wine", "birthday king/queen", "make a wish", "another year wiser", 
+                   "birthday vibes", "cake and confetti"],
+        "style": "festive birthday design with celebratory elements"
+    },
+    "christmas": {
+        "themes": ["santa's workshop", "christmas tree magic", "winter wonderland", "reindeer games", 
+                   "ugly sweater pattern", "holiday cheer", "snowman party", "christmas lights", 
+                   "gingerbread house", "festive ornaments"],
+        "style": "festive holiday design with Christmas spirit"
+    },
+    "summer": {
+        "themes": ["beach vibes", "summer sunset", "tropical drinks", "surfing waves", "ice cream truck", 
+                   "pool party", "summer road trip", "beach volleyball", "sunshine state", "summer festival"],
+        "style": "bright summer aesthetic with warm colors"
+    },
+    "winter": {
+        "themes": ["cozy fireplace", "snowflake pattern", "winter cabin", "hot chocolate mood", 
+                   "skiing adventure", "frozen landscape", "winter wildlife", "ice skating", 
+                   "snowy mountains", "aurora winter"],
+        "style": "cool winter design with icy elements"
+    },
+    "memes": {
+        "themes": ["internet culture", "viral moment", "meme lord", "dank vibes", "trending now", 
+                   "social media chaos", "emoji overload", "hashtag life", "viral sensation", 
+                   "meme energy"],
+        "style": "modern internet culture with meme aesthetics"
+    },
+    "fitness": {
+        "themes": ["gym motivation", "workout warrior", "fitness journey", "muscle power", 
+                   "cardio queen", "lift heavy", "fitness goals", "sweat equity", "gym life", "beast mode"],
+        "style": "energetic fitness design with motivational elements"
+    },
+    "coffee": {
+        "themes": ["coffee addiction", "espresso yourself", "coffee beans", "cafe vibes", 
+                   "morning ritual", "coffee chemistry", "latte art", "coffee shop", "caffeine molecule", 
+                   "coffee lover"],
+        "style": "warm coffee-themed design with cozy elements"
+    },
+    "music": {
+        "themes": ["sound waves", "vinyl records", "guitar hero", "music festival", "headphones on", 
+                   "piano keys", "music notes", "concert vibes", "DJ setup", "rock and roll"],
+        "style": "musical design with rhythm and flow"
+    }
+}
+
+def generate_design_prompt(category_name, theme, style):
+    """Generate an optimized prompt for single t-shirt designs"""
+    
+    prompt = f"""Create a SINGLE, professional t-shirt design with these exact specifications:
+
+CRITICAL: Generate only ONE unified design - absolutely no multiple versions, comparisons, or split compositions.
+
+Design Requirements:
+- Theme: {theme}
+- Style: {style}
+- Category: {category_name}
+
+Technical Specifications:
+- Single, centered composition filling the canvas
+- Clean edges suitable for direct fabric printing
+- Bold, eye-catching artwork that stands out on clothing
+- Professional vector-style or artistic illustration
+- Transparent or white background
+- High contrast for good print reproduction
+- One cohesive design element - no panels or variations
+
+IMPORTANT: The entire 1024x1024 image must be ONE complete design suitable for t-shirt printing. 
+Do not create multiple options, before/after, or comparison layouts."""
+
+    return prompt
+
+def generate_design(category=None):
+    """Generate a single t-shirt design"""
+    
+    # Select random category if not specified
+    if not category:
+        category = random.choice(list(DESIGN_CATEGORIES.keys()))
+    
+    # Get category details
+    category_info = DESIGN_CATEGORIES.get(category, DESIGN_CATEGORIES["abstract"])
+    theme = random.choice(category_info["themes"])
+    style = category_info["style"]
+    
+    # Generate the design prompt
+    prompt = generate_design_prompt(category, theme, style)
+    
+    print(f"Generating design for category: {category}")
+    print(f"Theme: {theme}")
+    print(f"Prompt: {prompt[:200]}...")
+    
     try:
-        if os.environ.get('GITHUB_ACTIONS'):
-            logger.info("📍 Running in: GitHub Actions")
-        else:
-            logger.info("📍 Running in: Local environment")
+        # Generate image with DALL-E 3
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="standard",
+            style="vivid",
+            n=1  # Always generate only 1 image
+        )
         
-        logger.info(f"🐍 Python version: {sys.version}")
+        image_url = response.data[0].url
+        revised_prompt = response.data[0].revised_prompt
         
-        generator = TShirtGenerator()
-        generator.run_daily_generation()
+        print(f"Design generated successfully!")
+        print(f"Revised prompt: {revised_prompt[:200]}...")
+        
+        # Download the image
+        image_response = requests.get(image_url)
+        image_response.raise_for_status()
+        
+        # Save the image
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"design_{category}_{theme.replace(' ', '_')}_{timestamp}.png"
+        
+        with open(filename, 'wb') as f:
+            f.write(image_response.content)
+        
+        print(f"Design saved as: {filename}")
+        
+        return {
+            "filename": filename,
+            "category": category,
+            "theme": theme,
+            "prompt": prompt,
+            "revised_prompt": revised_prompt,
+            "image_url": image_url,
+            "image_data": image_response.content
+        }
         
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}")
-        logger.error("Traceback:", exc_info=True)
-        sys.exit(1)
+        print(f"Error generating design: {str(e)}")
+        return None
+
+def upload_to_printful(design_data):
+    """Upload design to Printful"""
+    
+    if not PRINTFUL_API_KEY:
+        print("Printful API key not configured, skipping upload")
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {PRINTFUL_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        # First, upload the image file
+        files_url = f"{PRINTFUL_API_BASE}/files"
+        
+        # Convert image to base64
+        image_base64 = base64.b64encode(design_data["image_data"]).decode('utf-8')
+        
+        file_data = {
+            "name": design_data["filename"],
+            "contents": f"data:image/png;base64,{image_base64}"
+        }
+        
+        response = requests.post(files_url, json=file_data, headers=headers)
+        response.raise_for_status()
+        
+        file_id = response.json()["result"]["id"]
+        print(f"File uploaded to Printful with ID: {file_id}")
+        
+        # Create a product
+        product_data = {
+            "sync_product": {
+                "name": f"{design_data['category'].title()} - {design_data['theme'].title()}",
+                "thumbnail": f"data:image/png;base64,{image_base64[:1000]}..."  # Truncated for thumbnail
+            },
+            "sync_variants": [
+                {
+                    "variant_id": 4012,  # Unisex Staple T-Shirt (Bella + Canvas 3001) - S
+                    "retail_price": "25.00",
+                    "files": [
+                        {
+                            "id": file_id,
+                            "type": "default"
+                        }
+                    ]
+                },
+                {
+                    "variant_id": 4013,  # M
+                    "retail_price": "25.00",
+                    "files": [{"id": file_id, "type": "default"}]
+                },
+                {
+                    "variant_id": 4014,  # L
+                    "retail_price": "25.00",
+                    "files": [{"id": file_id, "type": "default"}]
+                },
+                {
+                    "variant_id": 4015,  # XL
+                    "retail_price": "25.00",
+                    "files": [{"id": file_id, "type": "default"}]
+                },
+                {
+                    "variant_id": 4016,  # 2XL
+                    "retail_price": "28.00",
+                    "files": [{"id": file_id, "type": "default"}]
+                }
+            ]
+        }
+        
+        # Add store ID if configured
+        if PRINTFUL_STORE_ID:
+            product_url = f"{PRINTFUL_API_BASE}/store/{PRINTFUL_STORE_ID}/products"
+        else:
+            product_url = f"{PRINTFUL_API_BASE}/sync/products"
+        
+        response = requests.post(product_url, json=product_data, headers=headers)
+        response.raise_for_status()
+        
+        product_id = response.json()["result"]["id"]
+        print(f"Product created in Printful with ID: {product_id}")
+        
+        return product_id
+        
+    except Exception as e:
+        print(f"Error uploading to Printful: {str(e)}")
+        return None
+
+def create_shopify_product(design_data, printful_product_id=None):
+    """Create product in Shopify"""
+    
+    if not SHOPIFY_STORE or not SHOPIFY_ACCESS_TOKEN:
+        print("Shopify not configured, skipping product creation")
+        return None
+    
+    headers = {
+        "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        # Calculate prices with markup
+        base_price = 25.00
+        retail_price = round(base_price * MARKUP_PERCENT, 2)
+        
+        product_data = {
+            "product": {
+                "title": f"{design_data['category'].title()} T-Shirt - {design_data['theme'].title()}",
+                "body_html": f"<p>Unique {design_data['category']} themed t-shirt featuring {design_data['theme']}.</p><p>Designed with AI and printed on demand on high-quality fabric.</p>",
+                "vendor": "AI Designs",
+                "product_type": "T-Shirt",
+                "tags": f"{design_data['category']}, ai-generated, t-shirt, {design_data['theme']}",
+                "variants": [
+                    {"option1": "S", "price": str(retail_price), "sku": f"TEE-{design_data['category']}-S"},
+                    {"option1": "M", "price": str(retail_price), "sku": f"TEE-{design_data['category']}-M"},
+                    {"option1": "L", "price": str(retail_price), "sku": f"TEE-{design_data['category']}-L"},
+                    {"option1": "XL", "price": str(retail_price), "sku": f"TEE-{design_data['category']}-XL"},
+                    {"option1": "2XL", "price": str(round(retail_price * 1.12, 2)), "sku": f"TEE-{design_data['category']}-2XL"}
+                ],
+                "options": [
+                    {"name": "Size", "values": ["S", "M", "L", "XL", "2XL"]}
+                ]
+            }
+        }
+        
+        url = f"{SHOPIFY_API_BASE}/products.json"
+        response = requests.post(url, json=product_data, headers=headers)
+        response.raise_for_status()
+        
+        shopify_product = response.json()["product"]
+        print(f"Product created in Shopify: {shopify_product['title']}")
+        
+        return shopify_product["id"]
+        
+    except Exception as e:
+        print(f"Error creating Shopify product: {str(e)}")
+        return None
+
+def main():
+    """Main function to generate and upload design"""
+    
+    print("=== T-Shirt Design Generator ===")
+    print(f"Available categories: {', '.join(DESIGN_CATEGORIES.keys())}")
+    
+    # Generate design
+    design = generate_design()
+    
+    if design:
+        # Upload to Printful
+        printful_id = upload_to_printful(design)
+        
+        # Create Shopify product
+        shopify_id = create_shopify_product(design, printful_id)
+        
+        # Log results
+        log_data = {
+            "timestamp": datetime.now().isoformat(),
+            "design": {
+                "filename": design["filename"],
+                "category": design["category"],
+                "theme": design["theme"],
+                "prompt": design["prompt"]
+            },
+            "printful_product_id": printful_id,
+            "shopify_product_id": shopify_id
+        }
+        
+        # Append to log file
+        log_filename = "generation_log.json"
+        logs = []
+        
+        if os.path.exists(log_filename):
+            with open(log_filename, 'r') as f:
+                logs = json.load(f)
+        
+        logs.append(log_data)
+        
+        with open(log_filename, 'w') as f:
+            json.dump(logs, f, indent=2)
+        
+        print(f"\nGeneration complete! Check {log_filename} for details.")
+        
+    else:
+        print("Failed to generate design")
 
 if __name__ == "__main__":
     main()
