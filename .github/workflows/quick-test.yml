@@ -1,50 +1,38 @@
-name: Quick Test - Single Design
+name: Test Setup
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-generation:
+  test:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - uses: actions/setup-python@v4
       with:
-        python-version: '3.x'
+        python-version: '3.11'
     
-    - name: Install minimal dependencies
-      run: pip install openai requests
-    
-    - name: Generate one design
+    - name: Test environment
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         PRINTFUL_API_KEY: ${{ secrets.PRINTFUL_API_KEY }}
         PRINTFUL_STORE_ID: ${{ secrets.PRINTFUL_STORE_ID }}
-        SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-        MARKUP_PERCENT: ${{ secrets.MARKUP_PERCENT }}
       run: |
-        echo "🎨 Generating a single test design..."
-        python generate_tee.py
-    
-    - name: Show results
-      if: always()
-      run: |
-        echo "📊 Generation complete!"
-        if [ -f tshirt_generator.log ]; then
-          echo "📝 Last 20 lines of log:"
-          tail -20 tshirt_generator.log
-        fi
-        echo "🖼️ Generated images:"
-        ls -la *.png 2>/dev/null || echo "No images found"
-    
-    - name: Upload results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: quick-test-${{ github.run_number }}
-        path: |
-          tshirt_generator.log
-          *.png
+        echo "🔍 Testing setup..."
+        echo "Repository: ${{ github.repository }}"
+        echo "Pages URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+        
+        # Check secrets
+        echo ""
+        echo "Checking secrets:"
+        [ -n "$PRINTFUL_API_KEY" ] && echo "✅ PRINTFUL_API_KEY is set" || echo "❌ PRINTFUL_API_KEY missing"
+        [ -n "$PRINTFUL_STORE_ID" ] && echo "✅ PRINTFUL_STORE_ID is set" || echo "❌ PRINTFUL_STORE_ID missing"
+        [ -n "${{ secrets.OPENAI_API_KEY }}" ] && echo "✅ OPENAI_API_KEY is set" || echo "❌ OPENAI_API_KEY missing"
+        [ -n "${{ secrets.MARKUP_PERCENT }}" ] && echo "✅ MARKUP_PERCENT is set" || echo "❌ MARKUP_PERCENT missing"
+        
+        # Test Python
+        echo ""
+        echo "Testing Python:"
+        pip install requests
+        python -c "import requests; print('✅ Python and requests working')"
